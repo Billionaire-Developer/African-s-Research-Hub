@@ -1,0 +1,58 @@
+
+.navbar {
+    display: flex;
+    justify-content: space-around;
+    padding: 16px;
+    background: rgb(20, 44, 88);
+    box-shadow: 0 1px 3px -2px black;
+}
+.nav-logo{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.nav-logo p{
+    font-size: 20px;
+    font-weight: 800;
+    color: #fff;
+}
+span{
+    color: rgb(78, 78, 255);
+}
+.nav-menu {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    gap: 50px;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 500;
+}
+.nav-menu li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    transition: .5s ease-in;
+    cursor: pointer;
+}
+.nav-menu li:hover {
+    color: rgb(121, 13, 22);
+}
+
+/* Keep list items white in sticky dark navbar */
+.dark-nav .nav-menu li a {
+  color: white !important;
+}
+
+/* Optional: make hover effect just change underline or bold */
+.nav-menu li a:hover {
+  color: #00bfff; /* or white or any contrast color */
+  text-decoration: underline;
+}
+
+/* Remove inherited red from li:hover */
+.nav-menu li:hover {
+  color: white; /* Override unwanted color */
+}
