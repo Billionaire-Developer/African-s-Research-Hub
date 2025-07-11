@@ -1,5 +1,5 @@
 from app import db
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
 class Users(db.Model):
@@ -31,4 +31,31 @@ class Abstracts(db.Model):
     date_submitted = db.Column(db.DateTime, index=True, default=datetime.now(timezone.utc)) # Default to current UTC time during submition
 
     def __repr__(self):
-        return f'<Abstract: {self.title}, Status: {self.status}>'
+        return f'<Abstract: {self.title}, Abstract ID: {self.id} Status: {self.status}>'
+
+class Payments(db.Model):
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
+    amount = db.Column(db.Float, default='1.99', nullable=False)
+    currency = db.Column(db.String(64), default='USD')
+    status = db.Column(db.String(64), default='pending', index=True)
+    payment_date = db.Column(db.DateTime, nullable=True)
+    method = db.Column(db.String(64), default='Bank')
+    abstract = db.relationship('Abstracts', backref=db.backref('payments', lazy=True))
+    
+    def __repr__(self):
+        return f'''<Payment ID: {self.id}, Abstract ID: {self.abstract_id}, Currency: {self.currency}\n,
+    Amount: {self.amount}, Method: {self.method}, Status: {self.status}'''
+    
+class Invoices(db.Model):
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
+    invoice_url = db.Column(db.String(255), index=True)
+    generated_date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    due_date = db.Column(db.DateTime, default=datetime.now(timezone.utc) + timedelta(weeks=2), nullable=True)
+    paid = db.Column(db.Boolean, default=False)
+    abstract = db.relationship('Abstracts', backref=db.backref('invoices', lazy=True))
+    
+    def __repr__(self):
+        return f'''<Invoice ID: {self.id}, Abstract ID: {self.abstract_id}, Generated Date: {self.generated_date}, 
+    Due Date: {self.due_date}, Paid: {self.paid}\n Invoice URL:{self.invoice_url}'''
