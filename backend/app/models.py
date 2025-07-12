@@ -16,6 +16,9 @@ class Users(db.Model):
     def verify_password(self, password):
         return check_password_hash(self.password_hash, password)
     
+    def __repr__(self):
+        return f"<User ID: {self.id}, Fullname: {self.fullname}, Email: {self.email}, Role: {self.role}>"
+    
 class Abstracts(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     title = db.Column(db.String(256), nullable=False)
@@ -57,5 +60,33 @@ class Invoices(db.Model):
     abstract = db.relationship('Abstracts', backref=db.backref('invoices', lazy=True))
     
     def __repr__(self):
-        return f'''<Invoice ID: {self.id}, Abstract ID: {self.abstract_id}, Generated Date: {self.generated_date}, 
+        return f'''<Invoice ID: {self.id}, Abstract ID: {self.abstract_id}, Generated At: {self.generated_date}, 
     Due Date: {self.due_date}, Paid: {self.paid}\n Invoice URL:{self.invoice_url}'''
+
+class Feedback(db.Model):
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
+    admin_id = db.Column(db.Integer, primarykey=True, index=True)
+    comment = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, index=True, default=datetime.now(timezone.utc))
+    
+    def __repr__(self):
+        return f"<Feedback ID: {self.id}, Abstract ID: {self.abstract_id}, Admin ID: {self.admin_id}, Created At: {self.created_at}>"
+
+class Notifications(db.Model):
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    message = db.Column(db.String(255), nullable=False)
+    read = db.Column(db.Boolean, default=False)
+    
+    def __repr__(self):
+        return f"<NOtification ID: {self.id}, User ID: {self.user_id}, Read: {self.read}>"
+
+class BlogPosts(db.Model):
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    author = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    body = db.Column(db.String(510), nullable=False)
+    created_at = db.Column(db.DateTime, index=True, default=datetime.now(timezone.utc))
+    
+    def __repr__(self):
+        return f"<BlogPost ID: {self.id}, Author: {self.author}, Created At: {self.created_at}>"

@@ -144,3 +144,10 @@ def confirm_payment():
         'payment_date': payment.payment_date.isoformat()
     }), 200
 
+
+# ----- Remaining routes -----
+# 
+# /api/user/dashboard Get student's dashboard info
+# POST/api/admin/review/:id Approve/reject abstract
+# POST/api/resubmit/:id Allow students to update rejected abstract
+# POST/api/contact 
