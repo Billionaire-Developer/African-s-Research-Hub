@@ -6,15 +6,17 @@ def make_shell_context():
     from app.models import Users, Abstracts
     return {
         'db': db,
-        'Users': Users,
-        'Invoices': Invoices,
-        'Payments': Payments,
-        'Feedback': Feedback,
-        'Abstracts': Abstracts,
-        'BlogPosts': BlogPosts,
-        'Notifications': Notifications,
+        'users': Users,
+        'invoices': Invoices,
+        'payments': Payments,
+        'feedback': Feedback,
+        'abstracts': Abstracts,
+        'blogPosts': BlogPosts,
+        'notifications': Notifications,
         
         }
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     app.run(debug=True, port=5000)

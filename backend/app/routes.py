@@ -26,8 +26,11 @@ def submit_abstract():
         institution=institution, # type: ignore
         author_id=author_id # type: ignore
     )
-    db.session.add(abstract)
-    db.session.commit()
+    try:
+        db.session.add(abstract)
+        db.session.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     
     # Add email notification logic here
 
@@ -96,8 +99,11 @@ def initiate_payment():
         abstract_id = abstract_id, # type: ignore
         invoice_url = invoice_url # type: ignore
     )
-    db.session.add(invoice)
-    db.session.commit()
+    try:
+        db.session.add(invoice)
+        db.session.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     # Create Payment (only use supported fields)
     payment = Payments(
@@ -137,7 +143,10 @@ def confirm_payment():
     # Update payment status and date
     payment.status = "confirmed"
     payment.payment_date = datetime.now(timezone.utc)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     return jsonify({
         "message": "Payment confirmed",
@@ -162,13 +171,13 @@ def login():
     )
     
     if user.query.filter_by(email=email).first() is None:
-        return jsonify({"error": "Email not found"})
+        return jsonify({"error": "Email not found"}), 401
     
     elif user.verify_password(password) == False:
-        return jsonify({"error": "Invalid password"})
+        return jsonify({"error": "Invalid password"}), 401
     
     elif user.query.filter_by(email=email).first() is None and user.verify_password(password) != True:
-        return jsonify({"error": "Invalid email and password"})
+        return jsonify({"error": "Invalid email and password"}), 401
     
     else:
         return jsonify({"message": "You have been successfully logged in"})
@@ -199,8 +208,11 @@ def register():
         password = password, # type: ignore
         role = role # type: ignore
     )
-    db.session.add(user)
-    db.session.commit()
+    try:
+        db.session.add(user)
+        db.session.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     return jsonify({"message": "Account created successfully, role: user.role}"}), 201
 
