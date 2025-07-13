@@ -46,7 +46,7 @@ def get_abstracts():
     "content": abstract.content,
     "field": abstract.field,
     "institution": abstract.institution,
-    "yearOfResearch": abstract.year_of_research,
+    "yearOfResearch": abstract.year,
     "keywords": abstract.keywords,
     "status": abstract.status,
     "authorId": abstract.author_id,
@@ -63,7 +63,7 @@ def get_specific_abstract(id):
         "content": abstract.content,
         "field": abstract.field,
         "institution": abstract.institution,
-        "yearOfResearch": abstract.year_of_research,
+        "yearOfResearch": abstract.year,
         "keywords": abstract.keywords,
         "status": abstract.status,
         "authorId": abstract.author_id,
@@ -111,8 +111,11 @@ def initiate_payment():
         amount=amount, # type: ignore
         currency=currency # type: ignore
     )
-    db.session.add(payment)
-    db.session.commit()
+    try:
+        db.session.add(payment)
+        db.session.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     return jsonify({
         "message": "Invoice and payment initiated",
@@ -165,22 +168,18 @@ def login():
     email = data.get("email")
     password = data.get("password")
     
-    user = Users(
-        email = email, # type: ignore
-        password = password # type: ignore
-    )
+    if not all([email, password]):
+        return jsonify({"error": "Missing required fields"}), 400
     
-    if user.query.filter_by(email=email).first() is None:
+    user = Users.query.filter_by(email=email).first()
+    
+    if not user:
         return jsonify({"error": "Email not found"}), 401
     
     elif user.verify_password(password) == False:
         return jsonify({"error": "Invalid password"}), 401
     
-    elif user.query.filter_by(email=email).first() is None and user.verify_password(password) != True:
-        return jsonify({"error": "Invalid email and password"}), 401
-    
-    else:
-        return jsonify({"message": "You have been successfully logged in"})
+    return jsonify({"error": "You have been successfully logged in"})
     
 
 @app.route("/api/register", methods=["POST"])
@@ -205,7 +204,7 @@ def register():
         fullname = fullname, # type: ignore
         email = email, # type: ignore
         country = country, # type: ignore
-        password = password, # type: ignore
+        password = user.set_password(password), # type: ignore
         role = role # type: ignore
     )
     try:
