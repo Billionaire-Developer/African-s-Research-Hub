@@ -41,17 +41,17 @@ def submit_abstract():
 def get_abstracts():
     abstracts = Abstracts.query.all()
     return jsonify([{
-        "id": abstract.id,
-        "title": abstract.title,
-        "content": abstract.content,
-        "field": abstract.field,
-        "institution": abstract.institution,
-        "year_of_research": abstract.year_of_research,
-        "keywords": abstract.keywords,
-        "status": abstract.status,
-        "author_id": abstract.author_id,
-        "date_submitted": abstract.date_submitted.isoformat()
-    } for abstract in abstracts]), 200
+    "id": abstract.id,
+    "title": abstract.title,
+    "content": abstract.content,
+    "field": abstract.field,
+    "institution": abstract.institution,
+    "yearOfResearch": abstract.year_of_research,
+    "keywords": abstract.keywords,
+    "status": abstract.status,
+    "authorId": abstract.author_id,
+    "dateSubmitted": abstract.date_submitted.isoformat()
+} for abstract in abstracts]), 200
     
     
 @app.route("/api/abstracts/<int:id>", methods=["GET"])
@@ -63,11 +63,11 @@ def get_specific_abstract(id):
         "content": abstract.content,
         "field": abstract.field,
         "institution": abstract.institution,
-        "year_of_research": abstract.year_of_research,
+        "yearOfResearch": abstract.year_of_research,
         "keywords": abstract.keywords,
         "status": abstract.status,
-        "author_id": abstract.author_id,
-        "date_submitted": abstract.date_submitted.isoformat()
+        "authorId": abstract.author_id,
+        "dateSubmitted": abstract.date_submitted.isoformat()
     }), 200
 
 
@@ -116,9 +116,9 @@ def initiate_payment():
 
     return jsonify({
         "message": "Invoice and payment initiated",
-        "invoice_id": invoice.id,
-        "invoice_url": invoice.invoice_url,
-        "payment_id": payment.id,
+        "invoiceId": invoice.id,
+        "invoiceUrl": invoice.invoice_url,
+        "paymentId": payment.id,
         "amount": payment.amount,
         "currency": payment.currency,
         "status": payment.status,
