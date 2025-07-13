@@ -66,7 +66,7 @@ class Invoices(db.Model):
 class Feedback(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
-    admin_id = db.Column(db.Integer, primarykey=True, index=True)
+    admin_id = db.Column(db.Integer, index=True)
     comment = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, index=True, default=datetime.now(timezone.utc))
     
