@@ -226,6 +226,7 @@ def register():
 
     return jsonify({"message": f"Account created successfully, role: {user.role}"}), 201
 
+
 @app.route("/api/contact", methods=["POST"])
 def contact():
     data = request.get_json()
@@ -257,10 +258,7 @@ def contact():
     
     # TODO: Add email notification logic here to notify admins
     
-    return jsonify({
-        "message": "Contact form submitted successfully",
-        "id": contact.id
-    }), 201
+    return jsonify({"message": "Contact form submitted successfully", "id": contact.id}), 201
 
 # ----- Remaining routes -----
 # 
