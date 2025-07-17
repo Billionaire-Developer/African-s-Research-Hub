@@ -91,3 +91,13 @@ class BlogPosts(db.Model):
     
     def __repr__(self):
         return f"<BlogPost ID: {self.id}, Author: {self.author}, Created At: {self.created_at}>"
+
+class Contact(db.Model):
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    email = db.Column(db.String(128), nullable=False, index=True)
+    message = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, index=True, default=datetime.now(timezone.utc))
+    
+    def __repr__(self):
+        return f"<Contact ID: {self.id}, Name: {self.name}, Email: {self.email}, Created At: {self.created_at}>"

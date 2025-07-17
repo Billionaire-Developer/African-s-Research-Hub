@@ -1,7 +1,7 @@
 from app import app, db
 from flask import request, jsonify
-from datetime import datetime, timedelta, timezone
-from app.models import Users, Abstracts, Payments, Invoices
+from datetime import datetime, timezone, timedelta
+from app.models import Users, Abstracts, Payments, Invoices, Contact
 
 
 @app.route("/api/submit", methods=["POST"])
@@ -226,9 +226,44 @@ def register():
 
     return jsonify({"message": f"Account created successfully, role: {user.role}"}), 201
 
+@app.route("/api/contact", methods=["POST"])
+def contact():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    name = data.get("name")
+    email = data.get("email")
+    message = data.get("message")
+    
+    if not all([name, email, message]):
+        return jsonify({"error": "Missing required fields: name, email, and message"}), 400
+    
+    # Basic email validation
+    if "@" not in email or "." not in email:
+        return jsonify({"error": "Invalid email format"}), 400
+    
+    contact = Contact(
+        name = name, # type: ignore
+        email = email, # type: ignore
+        message = message # type: ignore
+    )
+    
+    try:
+        db.session.add(contact)
+        db.session.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+    # TODO: Add email notification logic here to notify admins
+    
+    return jsonify({
+        "message": "Contact form submitted successfully",
+        "id": contact.id
+    }), 201
+
 # ----- Remaining routes -----
 # 
 # GET /api/user/dashboard Get student's dashboard info
 # POST /api/admin/review/:id Approve/reject abstract
 # POST /api/resubmit/:id Allow students to update rejected abstract
-# POST /api/contact
