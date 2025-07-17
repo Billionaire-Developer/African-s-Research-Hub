@@ -27,9 +27,9 @@ class Abstracts(db.Model):
     institution = db.Column(db.String(128), index=True, nullable=False)
     country = db.Column(db.String(50), index=True, nullable=False)
     year = db.Column(db.Integer, index=True, nullable=False)
-    keywords = db.Column(db.String(256), nullable=True)
-    status = db.Column(db.String(15), default='pending')
-    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    keywords = db.Column(db.String(256), nullable=True, index=True)
+    status = db.Column(db.String(15), default='pending', index=True)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     author = db.relationship('Users', backref=db.backref('abstracts', lazy=True))
     date_submitted = db.Column(db.DateTime, index=True, default=datetime.now(timezone.utc)) # Default to current UTC time during submition
 
