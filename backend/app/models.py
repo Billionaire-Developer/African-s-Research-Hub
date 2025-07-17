@@ -57,7 +57,7 @@ class Invoices(db.Model):
     amount = db.Column(db.Float, default=1.99, nullable=False)
     generated_date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     due_date = db.Column(db.DateTime, default=datetime.now(timezone.utc) + timedelta(weeks=2), nullable=True)
-    paid = db.Column(db.Boolean, default=False)
+    paid = db.Column(db.Boolean, default=False, index=True)
     abstract = db.relationship('Abstracts', backref=db.backref('invoices', lazy=True))
     
     def __repr__(self):

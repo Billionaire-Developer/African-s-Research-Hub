@@ -13,6 +13,8 @@ def submit_abstract():
     title = data.get("title")
     content = data.get("content")
     field = data.get("field")
+    country = data.get("country")
+    year = data.get("year")
     institution = data.get("institution")
     author_id = data.get("author_id")
 
@@ -20,11 +22,13 @@ def submit_abstract():
         return jsonify({"error": "Missing required fields"}), 400
 
     abstract = Abstracts(
-        title=title, # type: ignore
-        content=content, # type: ignore
-        field=field, # type: ignore
-        institution=institution, # type: ignore
-        author_id=author_id # type: ignore
+        title = title, # type: ignore
+        content = content, # type: ignore
+        field = field, # type: ignore
+        year = year, # type: ignore
+        country = country, # type: ignore
+        institution = institution, # type: ignore
+        author_id = author_id # type: ignore
     )
     try:
         db.session.add(abstract)
@@ -90,14 +94,12 @@ def initiate_payment():
         return jsonify({"error": "Abstract not found"}), 404
 
     # Generate invoice URL (dummy for now)
-    invoice_url = f"https://example.com/invoice/{abstract_id}-{datetime.now(timezone.utc).timestamp()}"
-    generated_date = datetime.now(timezone.utc)
-    due_date = generated_date + timedelta(weeks=2)
+    invoice_url = f"http://example.com/invoice/{abstract_id}-{datetime.now(timezone.utc).timestamp()}"
 
     # Create Invoice (only use supported fields)
     invoice = Invoices(
         abstract_id = abstract_id, # type: ignore
-        invoice_url = invoice_url # type: ignore
+        invoice_url = invoice_url, # type: ignore
     )
     try:
         db.session.add(invoice)
@@ -107,9 +109,10 @@ def initiate_payment():
 
     # Create Payment (only use supported fields)
     payment = Payments(
-        abstract_id=abstract_id, # type: ignore
-        amount=amount, # type: ignore
-        currency=currency # type: ignore
+        abstract_id = abstract_id, # type: ignore
+        amount = amount, # type: ignore
+        currency = currency, # type: ignore
+        method = method #type: ignore
     )
     try:
         db.session.add(payment)
@@ -143,9 +146,17 @@ def confirm_payment():
     if not payment:
         return jsonify({"error": "Payment not found"}), 404
 
-    # Update payment status and date
+    # Update payment status,date, and invoice paid status
     payment.status = "confirmed"
     payment.payment_date = datetime.now(timezone.utc)
+
+    abstract_id = payment.abstract_id
+    invoice = Invoices.query.filter_by(abstract_id=abstract_id).first()
+    if not invoice:
+        return jsonify({"error": "Invoice not found"}), 404
+    
+    invoice.paid = not invoice.paid
+    
     try:
         db.session.commit()
     except Exception as e:
@@ -179,7 +190,7 @@ def login():
     elif user.verify_password(password) == False:
         return jsonify({"error": "Invalid password"}), 401
     
-    return jsonify({"error": "You have been successfully logged in"})
+    return jsonify({"message": "You have been successfully logged in"}), 201
     
 
 @app.route("/api/register", methods=["POST"])
@@ -204,16 +215,16 @@ def register():
         fullname = fullname, # type: ignore
         email = email, # type: ignore
         country = country, # type: ignore
-        password = user.set_password(password), # type: ignore
         role = role # type: ignore
     )
+    user.set_password(password) # type: ignore
     try:
         db.session.add(user)
         db.session.commit()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({"message": "Account created successfully, role: user.role}"}), 201
+    return jsonify({"message": f"Account created successfully, role: {user.role}"}), 201
 
 # ----- Remaining routes -----
 # 
