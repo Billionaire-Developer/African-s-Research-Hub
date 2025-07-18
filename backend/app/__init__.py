@@ -1,6 +1,7 @@
 from flask import Flask
 from config import Config
 # from flask_cors import CORS
+# from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 

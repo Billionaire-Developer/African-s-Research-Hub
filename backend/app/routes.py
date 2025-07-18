@@ -36,7 +36,7 @@ def submit_abstract():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-    # Add email notification logic here
+    # TODO: Add email notification logic here to notify users
 
     return jsonify({"message": "Abstract submitted successfully", "id": abstract.id}), 201
 
@@ -44,6 +44,8 @@ def submit_abstract():
 @app.route("/api/abstracts", methods=["GET"])
 def get_abstracts():
     abstracts = Abstracts.query.all()
+    if not abstracts:
+        return jsonify({"error": "No abstracts found"}), 404
     return jsonify([{
     "id": abstract.id,
     "title": abstract.title,
@@ -263,5 +265,27 @@ def contact():
 # ----- Remaining routes -----
 # 
 # GET /api/user/dashboard Get student's dashboard info
+
+@app.route('/api/user/dashboard', methods=['GET'])
+def dashboard():
+    # Track submission, status, and payment
+    
+    # submissions = Abstracts.query.filter_by(author_id=current_user.id).all()
+    # if not submissions:
+    #     return jsonify({"error": "You haven't submit any abstracts yet"}), 404
+    
+    # return jsonify([{
+    #     "title": submission.title,
+    #     "status": submission.status,
+    #     "field": submission.filed,
+    #     "institutiom": submission.institution,
+    #     "date": submission.date_submitted,
+    #     "year": submission.year,
+    #     "country": submission.country,
+    #     "id": submission.id
+    # } for submission in submissions]), 200
+    
+    return jsonify({"message":"Dashboard info not implemented yet"}), 501
+
 # POST /api/admin/review/:id Approve/reject abstract
 # POST /api/resubmit/:id Allow students to update rejected abstract
