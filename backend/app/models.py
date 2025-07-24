@@ -1,14 +1,17 @@
-from app import db
+from app import db, login
+from flask_login import UserMixin # type: ignore
 from datetime import datetime, timezone, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
-class Users(db.Model):
+class Users(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     fullname = db.Column(db.String(128), nullable=False)
     email = db.Column(db.String(128), unique=True, index=True)
     country = db.Column(db.String(64), nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
+    last_seen = db.Column(db.DateTime, default=datetime.now(timezone.utc), index=True)
     role = db.Column(db.String(64), index=True, default='student')
+    submissions = db.relationship('Abstracts', backref='author', lazy='dynamic')
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -19,7 +22,7 @@ class Users(db.Model):
     def __repr__(self):
         return f"<User ID: {self.id}, Fullname: {self.fullname}, Email: {self.email}, Role: {self.role}>"
     
-class Abstracts(db.Model):
+class Abstracts(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     title = db.Column(db.String(256), nullable=False)
     content = db.Column(db.String(), nullable=False)
@@ -36,7 +39,7 @@ class Abstracts(db.Model):
     def __repr__(self):
         return f'<Abstract: {self.title}, Abstract ID: {self.id} Status: {self.status}>'
 
-class Payments(db.Model):
+class Payments(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
     amount = db.Column(db.Float, default=1.99, nullable=False)
@@ -50,7 +53,7 @@ class Payments(db.Model):
         return f'''<Payment ID: {self.id}, Abstract ID: {self.abstract_id}, Currency: {self.currency}\n,
     Amount: {self.amount}, Method: {self.method}, Status: {self.status}'''
     
-class Invoices(db.Model):
+class Invoices(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
     invoice_url = db.Column(db.String(255), index=True)
@@ -64,7 +67,7 @@ class Invoices(db.Model):
         return f'''<Invoice ID: {self.id}, Abstract ID: {self.abstract_id}, Generated At: {self.generated_date}, 
     Due Date: {self.due_date}, Paid: {self.paid}\n Invoice URL:{self.invoice_url}'''
 
-class Feedback(db.Model):
+class Feedback(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
     admin_id = db.Column(db.Integer, index=True)
@@ -74,7 +77,7 @@ class Feedback(db.Model):
     def __repr__(self):
         return f"<Feedback ID: {self.id}, Abstract ID: {self.abstract_id}, Admin ID: {self.admin_id}, Created At: {self.created_at}>"
 
-class Notifications(db.Model):
+class Notifications(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     message = db.Column(db.String(255), nullable=False)
@@ -83,7 +86,7 @@ class Notifications(db.Model):
     def __repr__(self):
         return f"<NOtification ID: {self.id}, User ID: {self.user_id}, Read: {self.read}>"
 
-class BlogPosts(db.Model):
+class BlogPosts(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     author = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     body = db.Column(db.String(510), nullable=False)
@@ -92,7 +95,7 @@ class BlogPosts(db.Model):
     def __repr__(self):
         return f"<BlogPost ID: {self.id}, Author: {self.author}, Created At: {self.created_at}>"
 
-class Contact(db.Model):
+class Contact(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     name = db.Column(db.String(128), nullable=False)
     email = db.Column(db.String(128), nullable=False, index=True)
@@ -101,3 +104,7 @@ class Contact(db.Model):
     
     def __repr__(self):
         return f"<Contact ID: {self.id}, Name: {self.name}, Email: {self.email}, Created At: {self.created_at}>"
+
+@login.user_loader
+def load_user(id):
+    return Users.query.get(int(id))

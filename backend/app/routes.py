@@ -1,7 +1,15 @@
 from app import app, db
-from flask import request, jsonify
-from datetime import datetime, timezone, timedelta
+from flask import request, jsonify, redirect
+from flask_login import current_user, login_user, logout_user, login_required # type: ignore
+from datetime import datetime, timezone
 from app.models import Users, Abstracts, Payments, Invoices, Contact
+
+
+@app.before_request
+def before_request():
+    if current_user.is_authenticated:
+        current_user.last_seen = datetime.now(timezone.utc)
+        db.session.commit()
 
 
 @app.route("/api/submit", methods=["POST"])
@@ -78,6 +86,7 @@ def get_specific_abstract(id):
 
 
 @app.route("/api/payments/initiate", methods=["POST"])
+@login_required
 def initiate_payment():
     data = request.get_json()
     if not data:
@@ -172,8 +181,12 @@ def confirm_payment():
     }), 200
 
 
-@app.route("/api/login", methods=["POST"])
+@app.route("/api/login", methods=["GET", "POST"])
+@login_required
 def login():
+    if current_user.is_authenticated:
+        return redirect("/api/user/dashboard")
+    
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -192,11 +205,20 @@ def login():
     elif user.verify_password(password) == False:
         return jsonify({"error": "Invalid password"}), 401
     
+    if user.role in ["Admin", "admin"]:
+        return redirect("/api/admin/dashboard")
+    
+    elif user.role in ["Student", "student"]:
+        return redirect("/api/user/dashboard")
+    
     return jsonify({"message": "You have been successfully logged in"}), 201
     
 
-@app.route("/api/register", methods=["POST"])
+@app.route("/api/register", methods=["GET", "POST"])
 def register():
+    if current_user.is_authenticated:
+        return redirect("/api/user/dashboard")
+    
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -262,30 +284,29 @@ def contact():
     
     return jsonify({"message": "Contact form submitted successfully", "id": contact.id}), 201
 
-# ----- Remaining routes -----
-# 
-# GET /api/user/dashboard Get student's dashboard info
 
 @app.route('/api/user/dashboard', methods=['GET'])
+@login_required
 def dashboard():
-    # Track submission, status, and payment
+    """Track submission, status, and payment"""
     
-    # submissions = Abstracts.query.filter_by(author_id=current_user.id).all()
-    # if not submissions:
-    #     return jsonify({"error": "You haven't submit any abstracts yet"}), 404
+    submissions = Abstracts.query.filter_by(author_id=current_user.id).all()
+    if not submissions:
+        return jsonify({"error": "You haven't submit any abstracts yet"}), 404
     
-    # return jsonify([{
-    #     "title": submission.title,
-    #     "status": submission.status,
-    #     "field": submission.filed,
-    #     "institutiom": submission.institution,
-    #     "date": submission.date_submitted,
-    #     "year": submission.year,
-    #     "country": submission.country,
-    #     "id": submission.id
-    # } for submission in submissions]), 200
-    
-    return jsonify({"message":"Dashboard info not implemented yet"}), 501
+    return jsonify([{
+        "title": submission.title,
+        "status": submission.status,
+        "field": submission.filed,
+        "institutiom": submission.institution,
+        "date": submission.date_submitted,
+        "year": submission.year,
+        "country": submission.country,
+        "id": submission.id
+    } for submission in submissions]), 200
 
-# POST /api/admin/review/:id Approve/reject abstract
+
+
+# ----- Remaining routes -----
+# /api/admin/review/id Approve/reject abstract
 # POST /api/resubmit/:id Allow students to update rejected abstract
