@@ -3,6 +3,12 @@ from datetime import datetime, timezone
 from flask import request, jsonify, redirect
 from flask_login import current_user, login_user, logout_user, login_required # type: ignore
 from app.models import Users, Abstracts, Payments, Invoices, Contact, Notifications, Feedback
+from app.email_service import (
+    send_abstract_confirmation_email, 
+    send_payment_confirmation_email,
+    send_abstract_review_email,
+    send_admin_notification_email
+)
 
 
 @app.before_request
@@ -29,22 +35,42 @@ def submit_abstract():
     if not all([title, content, field, institution, author_id]):
         return jsonify({"error": "Missing required fields"}), 400
 
+    # Get the user to send confirmation email
+    user = Users.query.get(author_id)
+    if not user:
+        return jsonify({"error": "Author not found"}), 404
+
     abstract = Abstracts(
-        title = title, # type: ignore
-        content = content, # type: ignore
-        field = field, # type: ignore
-        year = year, # type: ignore
-        country = country, # type: ignore
-        institution = institution, # type: ignore
-        author_id = author_id # type: ignore
+        title = title,
+        content = content,
+        field = field,
+        year = year,
+        country = country,
+        institution = institution,
+        author_id = author_id
     )
+    
     try:
         db.session.add(abstract)
         db.session.commit()
+        
+        # Send confirmation email to user
+        send_abstract_confirmation_email(
+            user_email=user.email,
+            user_name=user.fullname,
+            abstract_title=abstract.title,
+            abstract_id=abstract.id
+        )
+        
+        # Send notification email to admin
+        send_admin_notification_email(
+            abstract_title=abstract.title,
+            author_name=user.fullname,
+            abstract_id=abstract.id
+        )
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-    # TODO: Add email notification logic here to notify users
 
     return jsonify({"message": "Abstract submitted successfully", "id": abstract.id}), 201
 
@@ -190,7 +216,11 @@ def confirm_payment():
     if not payment:
         return jsonify({"error": "Payment not found"}), 404
 
-    # Update payment status,date, and invoice paid status
+    # Get abstract and user info for email
+    abstract = Abstracts.query.get(payment.abstract_id)
+    user = Users.query.get(abstract.author_id) # type: ignore
+
+    # Update payment status, date, and invoice paid status
     payment.status = "confirmed"
     payment.payment_date = datetime.now(timezone.utc)
 
@@ -199,10 +229,20 @@ def confirm_payment():
     if not invoice:
         return jsonify({"error": "Invoice not found"}), 404
 
-    invoice.paid = not invoice.paid
+    invoice.paid = True
 
     try:
         db.session.commit()
+        
+        # Send payment confirmation email
+        send_payment_confirmation_email(
+            user_email=user.email, # type: ignore
+            user_name=user.fullname, # type: ignore
+            amount=payment.amount,
+            currency=payment.currency,
+            invoice_id=invoice.id
+        )
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -401,6 +441,7 @@ def review_abstract(abstract_id):
         return jsonify({"error": "Unauthorized: Admin access required"}), 403
 
     abstract = Abstracts.query.get_or_404(abstract_id)
+    user = Users.query.get(abstract.author_id)
 
     # Update abstract status
     if action == "approve":
@@ -428,6 +469,15 @@ def review_abstract(abstract_id):
         db.session.add(notification)
 
         db.session.commit()
+        
+        # Send email notification to user
+        send_abstract_review_email(
+            user_email=user.email, # type: ignore
+            user_name=user.fullname, # type: ignore
+            abstract_title=abstract.title,
+            status=abstract.status,
+            feedback=feedback_comment if feedback_comment else None
+        )
 
     except Exception as e:
         db.session.rollback()

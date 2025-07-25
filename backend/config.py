@@ -20,4 +20,4 @@ class Config(object):
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or os.environ.get('MAIL_USERNAME')
     
     # Admin email for notifications
-    ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') or 'donalddbanda@gmail.com'
+    ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') or 'admin@africanresearchhub.com'
