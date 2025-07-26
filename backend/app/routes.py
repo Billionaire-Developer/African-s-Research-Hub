@@ -258,6 +258,8 @@ def confirm_payment():
 @login_required
 def login():
     if current_user.is_authenticated:
+        if current_user.role in ["Admin", "admin"]:
+            return redirect("/api/admin")
         return redirect("/api/user/dashboard")
 
     data = request.get_json()
@@ -290,6 +292,8 @@ def login():
 @app.route("/api/register", methods=["POST"])
 def register():
     if current_user.is_authenticated:
+        if current_user.role in ["Admin", "admin"]:
+            return redirect("/api/admin")
         return redirect("/api/user/dashboard")
 
     data = request.get_json()

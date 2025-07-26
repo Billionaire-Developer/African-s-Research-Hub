@@ -1,0 +1,7 @@
+Flask
+secrets
+Flask-Mail
+Flask-Login
+python-dotenv
+Flask-Migrate
+Flask-SQLAlchemy

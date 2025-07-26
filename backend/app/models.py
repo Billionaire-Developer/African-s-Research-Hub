@@ -3,6 +3,12 @@ from flask_login import UserMixin # type: ignore
 from datetime import datetime, timezone, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
+
+@login.user_loader
+def load_user(id):
+    return Users.query.get(int(id))
+
+
 class Users(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     fullname = db.Column(db.String(128), nullable=False)
@@ -104,7 +110,3 @@ class Contact(UserMixin, db.Model):
     
     def __repr__(self):
         return f"<Contact ID: {self.id}, Name: {self.name}, Email: {self.email}, Created At: {self.created_at}>"
-
-@login.user_loader
-def load_user(id):
-    return Users.query.get(int(id))

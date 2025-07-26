@@ -104,11 +104,7 @@ def send_abstract_review_email(user_email, user_name, abstract_title, status, fe
         </html>
     """
     
-    send_email(subject,
-              current_app.config['MAIL_DEFAULT_SENDER'],
-              [user_email],
-              text_body,
-              html_body)
+    send_email(subject, current_app.config['MAIL_DEFAULT_SENDER'], [user_email], text_body, html_body)
 
 def send_admin_notification_email(abstract_title, author_name, abstract_id):
     """Send notification to admin when new abstract is submitted"""
