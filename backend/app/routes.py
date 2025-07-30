@@ -556,28 +556,152 @@ def resubmit_abstract(abstract_id):
         "dateSubmitted": abstract.date_submitted.isoformat()
     }), 200
 
-@app.route('/api/review', methods=['POST'])
-def review():
+@app.route('/api/reviews', methods=['POST'])
+def submit_review():
+    """Submit a new review"""
     data = request.get_json()
     
     if not data:
         return jsonify({"error": "No data provided"}), 400
     
     rating = data.get("rating")
-    comment = data.get("comment")
+    comment = data.get("comment", "").strip()
     
     if not rating:
-        return jsonify({"error": "Missing required data"}), 400
+        return jsonify({"error": "Rating is required"}), 400
     
+    try:
+        rating = int(rating)
+        if rating < 1 or rating > 5:
+            return jsonify({"error": "Rating must be between 1 and 5"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"error": "Rating must be a valid number"}), 400
+    
+    # Validate comment length
+    if comment and len(comment) > 1000:
+        return jsonify({"error": "Comment must be less than 1000 characters"}), 400
+    
+    # Create review
     review = Reviews(
-        rating=rating,
-        comment=comment
+        rating=rating, # type: ignore
+        comment=comment if comment else None, # type: ignore
+        user_id=current_user.id if current_user.is_authenticated else None # type: ignore
     )
     
     try:
         db.session.add(review)
         db.session.commit()
+        
+        return jsonify({
+            "message": "Thank you for your review",
+            "review": review.to_dict()
+        }), 201
+        
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        db.session.rollback()
+        return jsonify({"error": "Failed to save review"}), 500
+
+@app.route('/api/reviews', methods=['GET'])
+def get_reviews():
+    """Get all reviews with pagination and filtering"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    rating_filter = request.args.get('rating', type=int)
     
-    return jsonify({"message": "Thank you for your review"})
+    # Limit per_page to prevent abuse
+    per_page = min(per_page, 50)
+    
+    query = Reviews.query
+    
+    # Filter by rating if specified
+    if rating_filter and 1 <= rating_filter <= 5:
+        query = query.filter_by(rating=rating_filter)
+    
+    # Order by most recent first
+    query = query.order_by(Reviews.created_at.desc())
+    
+    # Paginate
+    reviews = query.paginate(
+        page=page, 
+        per_page=per_page, 
+        error_out=False
+    )
+    
+    # Calculate statistics
+    total_reviews = Reviews.query.count()
+    avg_rating = db.session.query(db.func.avg(Reviews.rating)).scalar()
+    avg_rating = round(avg_rating, 1) if avg_rating else 0
+    
+    # Rating distribution
+    rating_counts = {}
+    for i in range(1, 6):
+        rating_counts[i] = Reviews.query.filter_by(rating=i).count()
+    
+    return jsonify({
+        "reviews": [review.to_dict() for review in reviews.items],
+        "pagination": {
+            "page": page,
+            "pages": reviews.pages,
+            "per_page": per_page,
+            "total": reviews.total,
+            "has_next": reviews.has_next,
+            "has_prev": reviews.has_prev
+        },
+        "statistics": {
+            "total_reviews": total_reviews,
+            "average_rating": avg_rating,
+            "rating_distribution": rating_counts
+        }
+    }), 200
+
+
+@app.route('/api/reviews/stats', methods=['GET'])
+def get_review_stats():
+    """Get review statistics summary"""
+    total_reviews = Reviews.query.count()
+    
+    if total_reviews == 0:
+        return jsonify({
+            "total_reviews": 0,
+            "average_rating": 0,
+            "rating_distribution": {str(i): 0 for i in range(1, 6)}
+        }), 200
+    
+    avg_rating = db.session.query(db.func.avg(Reviews.rating)).scalar()
+    avg_rating = round(avg_rating, 1) if avg_rating else 0
+    
+    # Rating distribution
+    rating_counts = {}
+    for i in range(1, 6):
+        count = Reviews.query.filter_by(rating=i).count()
+        rating_counts[str(i)] = count
+    
+    return jsonify({
+        "total_reviews": total_reviews,
+        "average_rating": avg_rating,
+        "rating_distribution": rating_counts
+    }), 200
+
+
+@app.route('/api/admin/reviews', methods=['GET'])
+def admin_get_reviews():
+
+    """Admin endpoint to get all reviews with user details"""
+
+    if not current_user.is_authenticated or current_user.role != 'admin':
+        return jsonify({"error": "Admin access required"}), 403
+    
+    reviews = Reviews.query.order_by(Reviews.created_at.desc()).all()
+    
+    reviews_data = []
+    for review in reviews:
+        review_data = review.to_dict()
+        if review.user:
+            review_data['user_email'] = review.user.email
+            review_data['user_country'] = review.user.country
+        reviews_data.append(review_data)
+    
+    return jsonify({
+        "reviews": reviews_data,
+        "total": len(reviews_data)
+    }), 200

@@ -111,10 +111,22 @@ class Contact(UserMixin, db.Model):
     def __repr__(self):
         return f"<Contact ID: {self.id}, Name: {self.name}, Email: {self.email}, Created At: {self.created_at}>"
 
-class Reviews(UserMixin, db.Model):
+class Reviews(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
-    rating = db.Column(db.Float, nullable=False)
-    comment = db.Column(db.String(556), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    rating = db.Column(db.Integer, nullable=False)
+    comment = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, index=True, default=datetime.now(timezone.utc))
+    user = db.relationship('Users', backref=db.backref('reviews', lazy=True))
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'rating': self.rating,
+            'comment': self.comment,
+            'created_at': self.created_at.isoformat(),
+            'user_name': self.user.fullname if self.user else 'Anonymous'
+        }
     
     def __repr__(self):
-        return f"<Rating: {self.rating}, Comment: {self.comment[:50]}>"
+        return f"<Review ID: {self.id}, Rating: {self.rating}, User: {self.user_id}>"
