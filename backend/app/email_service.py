@@ -140,3 +140,89 @@ def send_admin_notification_email(abstract_title, author_name, abstract_id):
     """
     
     send_email(subject, current_app.config['MAIL_DEFAULT_SENDER'], [admin_email], text_body, html_body)
+
+def send_contact_confirmation_email(user_email, user_name):
+    """Send confirmation email to user when they submit a contact inquiry"""
+    subject = "We Received Your Message - African Research Hub"
+    
+    # Text version
+    text_body = f"""
+        Hello {user_name},
+
+        Thank you for contacting African Research Hub. We have received your message and will get back to you within 24-48 hours.
+
+        If your inquiry is urgent, please don't hesitate to reach out to us directly.
+
+        Best regards,
+        African Research Hub Support Team
+    """
+    
+    # Try to use template, fallback to HTML string
+    try:
+        html_body = render_template('contact_confirmation.html', user_name=user_name)
+    except:
+        # Fallback HTML version
+        html_body = f"""
+            <html>
+                <body>
+                    <h2>Hello {user_name},</h2>
+                    <p>Thank you for contacting <strong>African Research Hub</strong>. We have received your message and will get back to you within <strong>24-48 hours</strong>.</p>
+                    <p>If your inquiry is urgent, please don't hesitate to reach out to us directly.</p>
+                    <p>Best regards,<br><strong>African Research Hub Support Team</strong></p>
+                </body>
+            </html>
+        """
+    
+    send_email(subject, current_app.config['MAIL_DEFAULT_SENDER'], [user_email], text_body, html_body)
+
+def send_contact_admin_notification_email(contact_name, contact_email, contact_message, contact_id):
+    """Send notification to admin when new contact inquiry is submitted"""
+    subject = "New Contact Inquiry - African Research Hub"
+    admin_email = current_app.config['ADMIN_EMAIL']
+    
+    # Text version
+    text_body = f"""
+        New contact inquiry received:
+
+        From: {contact_name}
+        Email: {contact_email}
+        Contact ID: {contact_id}
+        Submitted: Just now
+
+        Message:
+        {contact_message}
+
+        Please respond to this inquiry promptly.
+
+        African Research Hub System
+    """
+    
+    # Try to use template, fallback to HTML string
+    try:
+        html_body = render_template(
+            'contact_admin_notification.html', 
+            contact_name=contact_name, 
+            contact_email=contact_email,
+            contact_message=contact_message,
+            contact_id=contact_id
+        )
+    except:
+        # Fallback HTML version
+        html_body = f"""
+            <html>
+                <body>
+                    <h2>New Contact Inquiry</h2>
+                        <p><strong>From:</strong> {contact_name}</p>
+                        <p><strong>Email:</strong> <a href="mailto:{contact_email}">{contact_email}</a></p>
+                        <p><strong>Contact ID:</strong> {contact_id}</p>
+                        <p><strong>Submitted:</strong> Just now</p>
+                        <h3>Message:</h3>
+                        <p">{contact_message}</p>
+                        <p><strong>Action Required:</strong> Please respond to this inquiry promptly.</p>
+                    <hr>
+                    <p><em>African Research Hub System</em></p>
+                </body>
+            </html>
+        """
+    
+    send_email(subject, current_app.config['MAIL_DEFAULT_SENDER'], [admin_email], text_body, html_body)

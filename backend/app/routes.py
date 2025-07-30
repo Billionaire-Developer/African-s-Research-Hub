@@ -7,7 +7,9 @@ from app.email_service import (
     send_abstract_confirmation_email, 
     send_payment_confirmation_email,
     send_abstract_review_email,
-    send_admin_notification_email
+    send_admin_notification_email,
+    send_contact_confirmation_email,
+    send_contact_admin_notification_email
 )
 
 
@@ -345,21 +347,49 @@ def contact():
     if "@" not in email or "." not in email:
         return jsonify({"error": "Invalid email format"}), 400
 
+    # Validate message length
+    if len(message.strip()) < 10:
+        return jsonify({"error": "Message must be at least 10 characters long"}), 400
+
+    if len(message) > 2000:
+        return jsonify({"error": "Message must be less than 2000 characters"}), 400
+
+    # Validate name length
+    if len(name.strip()) < 2:
+        return jsonify({"error": "Name must be at least 2 characters long"}), 400
+
     contact = Contact(
-        name = name, # type: ignore
-        email = email, # type: ignore
-        message = message # type: ignore
+        name = name.strip(), # type: ignore
+        email = email.strip().lower(), # type: ignore
+        message = message.strip() # type: ignore
     )
 
     try:
         db.session.add(contact)
         db.session.commit()
+        
+        # Send confirmation email to the user
+        send_contact_confirmation_email(
+            user_email=contact.email,
+            user_name=contact.name
+        )
+        
+        # Send notification email to admin
+        send_contact_admin_notification_email(
+            contact_name=contact.name,
+            contact_email=contact.email,
+            contact_message=contact.message,
+            contact_id=contact.id
+        )
+        
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        db.session.rollback()
+        return jsonify({"error": f"Failed to process contact form: {str(e)}"}), 500
 
-    # TODO: Add email notification logic here to notify admins
-
-    return jsonify({"message": "Contact form submitted successfully", "id": contact.id}), 201
+    return jsonify({
+        "message": "Thank you for your message! We'll get back to you within 24-48 hours.", 
+        "id": contact.id
+    }), 201
 
 
 @app.route("/api/user/dashboard/<int:user_id>", methods=["GET"])
