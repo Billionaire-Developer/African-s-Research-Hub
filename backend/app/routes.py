@@ -556,6 +556,7 @@ def resubmit_abstract(abstract_id):
         "dateSubmitted": abstract.date_submitted.isoformat()
     }), 200
 
+
 @app.route('/api/reviews', methods=['POST'])
 def submit_review():
     """Submit a new review"""
