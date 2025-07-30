@@ -110,3 +110,11 @@ class Contact(UserMixin, db.Model):
     
     def __repr__(self):
         return f"<Contact ID: {self.id}, Name: {self.name}, Email: {self.email}, Created At: {self.created_at}>"
+
+class Reviews(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    rating = db.Column(db.Float, nullable=False)
+    comment = db.Column(db.String(556), nullable=True)
+    
+    def __repr__(self):
+        return f"<Rating: {self.rating}, Comment: {self.comment[:50]}>"

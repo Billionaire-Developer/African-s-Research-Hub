@@ -2,7 +2,7 @@ from app import app, db
 from datetime import datetime, timezone
 from flask import request, jsonify, redirect
 from flask_login import current_user, login_user, logout_user, login_required # type: ignore
-from app.models import Users, Abstracts, Payments, Invoices, Contact, Notifications, Feedback
+from app.models import Users, Abstracts, Payments, Invoices, Contact, Notifications, Feedback, Reviews
 from app.email_service import (
     send_abstract_confirmation_email, 
     send_payment_confirmation_email,
@@ -556,3 +556,28 @@ def resubmit_abstract(abstract_id):
         "dateSubmitted": abstract.date_submitted.isoformat()
     }), 200
 
+@app.route('/api/review', methods=['POST'])
+def review():
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    
+    rating = data.get("rating")
+    comment = data.get("comment")
+    
+    if not rating:
+        return jsonify({"error": "Missing required data"}), 400
+    
+    review = Reviews(
+        rating=rating,
+        comment=comment
+    )
+    
+    try:
+        db.session.add(review)
+        db.session.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+    return jsonify({"message": "Thank you for your review"})
