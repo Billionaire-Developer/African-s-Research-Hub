@@ -147,8 +147,12 @@ def admin_dashboard():
 
 
 @app.route("/api/payments/initiate", methods=["POST"])
-@login_required
 def initiate_payment():
+    if current_user.is_authenticated:
+        if current_user.role in ["Admin", "admin"]:
+            return redirect("/api/admin")
+        return redirect("/api/user/dashboard")
+    
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -257,7 +261,6 @@ def confirm_payment():
 
 
 @app.route("/api/login", methods=["POST"])
-@login_required
 def login():
     if current_user.is_authenticated:
         if current_user.role in ["Admin", "admin"]:
