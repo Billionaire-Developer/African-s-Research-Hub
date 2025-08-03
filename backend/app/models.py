@@ -69,6 +69,10 @@ class Invoices(UserMixin, db.Model):
     paid = db.Column(db.Boolean, default=False, index=True)
     abstract = db.relationship('Abstracts', backref=db.backref('invoices', lazy=True))
     
+    # def delete_invoice_url(self, url):
+    #     del self.invoice_url
+    #     return
+    
     def __repr__(self):
         return f'''<Invoice ID: {self.id}, Abstract ID: {self.abstract_id}, Generated At: {self.generated_date}, 
     Due Date: {self.due_date}, Paid: {self.paid}\n Invoice URL:{self.invoice_url}'''

@@ -1,6 +1,7 @@
 Flask
 secrets
 Flask-Mail
+Flask-CORS
 Flask-Login
 python-dotenv
 Flask-Migrate
