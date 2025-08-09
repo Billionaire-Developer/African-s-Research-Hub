@@ -17,7 +17,8 @@ class Users(UserMixin, db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     last_seen = db.Column(db.DateTime, default=datetime.now(timezone.utc), index=True)
     role = db.Column(db.String(64), index=True, default='student')
-    submissions = db.relationship('Abstracts', backref='author', lazy='dynamic')
+    abstracts = db.relationship('Abstracts', backref='author', lazy='dynamic')
+    notifications = db.relationship('Abstracts', backref='user', lazy='dynamic')
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -39,7 +40,6 @@ class Abstracts(UserMixin, db.Model):
     keywords = db.Column(db.String(256), nullable=True, index=True)
     status = db.Column(db.String(15), default='pending', index=True)
     author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
-    author = db.relationship('Users', backref=db.backref('abstracts', lazy=True))
     date_submitted = db.Column(db.DateTime, index=True, default=datetime.now(timezone.utc)) # Default to current UTC time during submition
 
     def __repr__(self):
