@@ -98,7 +98,11 @@ def get_abstracts():
 
 @app.route("/api/abstracts/<int:id>", methods=["GET"])
 def get_specific_abstract(id):
-    abstract = Abstracts.query.get_or_404(id)
+    abstract = Abstracts.query.get(id)
+    
+    if abstract is None:
+        return jsonify({"error": "Abstract not found"}), 404
+    
     return jsonify({
         "id": abstract.id,
         "title": abstract.title,
@@ -148,6 +152,10 @@ def admin_dashboard():
 
 @app.route("/api/payments/initiate", methods=["POST"])
 def initiate_payment():
+    
+    if not current_user.is_authenticated:
+        return jsonify({"error": "User not authenticated"}), 401
+    
     if current_user.is_authenticated:
         if current_user.role in ["Admin", "admin"]:
             return redirect("/api/admin")
@@ -286,10 +294,10 @@ def login():
         return jsonify({"error": "Invalid password"}), 401
 
     if user.role in ["Admin", "admin"]:
-        return redirect("/api/admin")
+        redirect("/api/admin")
 
     elif user.role in ["Student", "student"]:
-        return redirect("/api/user/dashboard")
+        redirect("/api/user/dashboard")
 
     return jsonify({"message": "You have been successfully logged in"}), 201
 
@@ -395,10 +403,17 @@ def contact():
     }), 201
 
 
-@app.route("/api/user/dashboard/<int:user_id>", methods=["GET"])
-def user_dashboard(user_id):
+@app.route("/api/user/dashboard", methods=["GET"])
+def user_dashboard():
     """Get student's dashboard info including their abstracts and payment status"""
-    user = Users.query.get_or_404(user_id)
+    
+    if not current_user.is_authenticated or current_user.role != 'student':
+        return jsonify({"error": "Student access required"}), 403
+    
+    user = Users.query.get(current_user.id)
+    
+    if user is None:
+        return jsonify({"error": "User not found"}), 404
 
     # Get user's abstracts with related payment/invoice info
     user_abstracts = []
@@ -426,7 +441,7 @@ def user_dashboard(user_id):
         user_abstracts.append(abstract_data)
 
     # Get user's notifications
-    notifications = Notifications.query.filter_by(user_id=user_id).order_by(Notifications.id.desc()).all()
+    notifications = Notifications.query.filter_by(user_id=user.id).order_by(Notifications.id.desc()).all()
     notification_data = [{
         "id": notif.id,
         "message": notif.message,
@@ -477,7 +492,11 @@ def review_abstract(abstract_id):
     if not admin or admin.role != "admin":
         return jsonify({"error": "Unauthorized: Admin access required"}), 403
 
-    abstract = Abstracts.query.get_or_404(abstract_id)
+    abstract = Abstracts.query.get(abstract_id)
+    
+    if abstract is None:
+        return jsonify({"error": "Abstract not found"}), 404
+    
     user = Users.query.get(abstract.author_id)
 
     # Update abstract status
@@ -539,7 +558,9 @@ def resubmit_abstract(abstract_id):
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
 
-    abstract = Abstracts.query.get_or_404(abstract_id)
+    abstract = Abstracts.query.get(abstract_id)
+    if abstract is None:
+        return jsonify({"error": "Abstract not found"}), 404
 
     # Verify the user owns this abstract
     if abstract.author_id != user_id:
