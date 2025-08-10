@@ -18,7 +18,7 @@ class Users(UserMixin, db.Model):
     last_seen = db.Column(db.DateTime, default=datetime.now(timezone.utc), index=True)
     role = db.Column(db.String(64), index=True, default='student')
     abstracts = db.relationship('Abstracts', backref='author', lazy='dynamic')
-    notifications = db.relationship('Abstracts', backref='user', lazy='dynamic')
+    notifications = db.relationship('Notifications', backref='user', lazy='dynamic')
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
