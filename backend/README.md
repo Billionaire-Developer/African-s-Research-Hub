@@ -6,9 +6,9 @@ To activate the virtual environment, run:
         Powershell: venv\Scripts\Activate.ps1
         Git Bash: source venv\Scripts\activate
 
-        If activation fails in Powershell, run:
-            Set-ExecutionPolicy RemoteSigned
+    If activation fails in Powershell, run:
+        Set-ExecutionPolicy RemoteSigned
 
-    on Linux/ Mac:
-        source venv/bin/activate
+on Linux/ Mac:
+    source venv/bin/activate
 
