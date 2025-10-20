@@ -9,7 +9,6 @@ instance/
 *.db
 *.sqlite
 *.sqlite3
-app.db
 
 # Python
 __pycache__/
@@ -19,7 +18,7 @@ __pycache__/
 
 # Virtual environments
 venv/
-.venv
+.venv/
 
 # IDE and editor files
 .vscode/
@@ -42,3 +41,4 @@ docs/_build/
 migrations/
 # migrations/versions/*.py
 # !migrations/versions/__init__.py
+

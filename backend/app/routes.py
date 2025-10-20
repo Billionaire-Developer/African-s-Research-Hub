@@ -1,7 +1,9 @@
+import os
 from app import app, db
+from dotenv import load_dotenv
 from datetime import datetime, timezone
 from flask import request, jsonify, redirect
-from flask_login import current_user, login_user, logout_user, login_required # type: ignore
+from flask_login import current_user, login_user, logout_user, login_required
 from app.models import Users, Abstracts, Payments, Invoices, Contact, Notifications, Feedback, Reviews
 from app.email_service import (
     send_abstract_confirmation_email, 
@@ -12,6 +14,9 @@ from app.email_service import (
     send_contact_admin_notification_email
 )
 
+load_dotenv()
+
+WEBSITE_URL = os.environ.get('WEBSITE_URL', 'http://localhost:5000')
 
 @app.before_request
 def before_request():
@@ -43,13 +48,13 @@ def submit_abstract():
         return jsonify({"error": "Author not found"}), 404
 
     abstract = Abstracts(
-        title = title,
-        content = content,
-        field = field,
-        year = year,
-        country = country,
-        institution = institution,
-        author_id = author_id
+        title = title, # type: ignore
+        content = content, # type: ignore
+        field = field, # type: ignore # type: ignore
+        year = year, # type: ignore
+        country = country, # type: ignore
+        institution = institution, # type: ignore
+        author_id = author_id # type: ignore
     )
     
     try:
@@ -178,7 +183,7 @@ def initiate_payment():
         return jsonify({"error": "Abstract not found"}), 404
 
     # Generate invoice URL (dummy for now)
-    invoice_url = f"http://example.com/invoice/{abstract_id}-{datetime.now(timezone.utc).timestamp()}"
+    invoice_url = f"{WEBSITE_URL}/invoice/{abstract_id}-{datetime.now(timezone.utc).timestamp()}"
 
     # Create Invoice (only use supported fields)
     invoice = Invoices(
@@ -511,16 +516,16 @@ def review_abstract(abstract_id):
         # Add feedback if provided
         if feedback_comment:
             feedback = Feedback(
-                abstract_id = abstract_id,
-                admin_id = admin_id,
-                comment = feedback_comment
+                abstract_id = abstract_id, # type: ignore
+                admin_id = admin_id, # type: ignore
+                comment = feedback_comment # type: ignore
             )
             db.session.add(feedback)
 
         # Add notification for the author
         notification = Notifications(
-            user_id = abstract.author_id,
-            message = notification_message
+            user_id = abstract.author_id, # type: ignore
+            message = notification_message # type: ignore
         )
         db.session.add(notification)
 
@@ -593,8 +598,8 @@ def resubmit_abstract(abstract_id):
     try:
         # Add notification for successful resubmission
         notification = Notifications(
-            user_id = user_id,
-            message = f"Your abstract '{abstract.title}' has been resubmitted successfully!"
+            user_id = user_id, # type: ignore
+            message = f"Your abstract '{abstract.title}' has been resubmitted successfully!" # type: ignore
         )
         db.session.add(notification)
         db.session.commit()

@@ -14,7 +14,7 @@ app.config.from_object('config.Config')
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 login = LoginManager(app)
-login.login_view = 'login'  # Redirect to login page if not authenticated
+login.login_view = 'login'  # Redirect to login page if not authenticated #type: ignore
 
 # Initialize Flask-Mail
 mail.init_app(app)

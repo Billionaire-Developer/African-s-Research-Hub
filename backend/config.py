@@ -22,6 +22,9 @@ class Config(object):
     
     # Admin email for notifications
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
+
+    # Website URL for email links
+    WEBSITE_URL = os.environ.get('WEBSITE_URL', 'http://localhost:5000')
     
     # Additional cPanel-specific settings
     MAIL_DEBUG = os.environ.get('MAIL_DEBUG', 'false').lower() in ['true', 'on', '1']
