@@ -2,12 +2,17 @@ Always run the run.py file after activating the virtual environment because the 
 
 To activate the virtual environment, run:
     
-    on Windows: 
-        Command Prompt: venv\Scripts\activate.bat
-        Powershell: venv\Scripts\Activate.ps1
-        Git Bash: source venv\Scripts\activate
-    If activation fails in Powershell, run:
-        Set-ExecutionPolicy RemoteSigned
-    on Linux/ Mac:
+    # on Windows: 
+        # Command Prompt:
+            venv\Scripts\activate.bat
+        # Powershell:
+            venv\Scripts\Activate.ps1
+        # Git Bash:
+            source venv\Scripts\activate
+            
+        # If activation fails in Powershell, run:
+            Set-ExecutionPolicy RemoteSigned
+
+    # on Linux/ Mac, run:
         source venv/bin/activate
 
