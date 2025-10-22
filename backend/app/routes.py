@@ -77,6 +77,7 @@ def submit_abstract():
         )
         
     except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
     return jsonify({"message": "Abstract submitted successfully", "id": abstract.id}), 201
@@ -194,6 +195,7 @@ def initiate_payment():
         db.session.add(invoice)
         db.session.commit()
     except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
     # Create Payment (only use supported fields)
@@ -207,6 +209,7 @@ def initiate_payment():
         db.session.add(payment)
         db.session.commit()
     except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
     return jsonify({
@@ -263,6 +266,7 @@ def confirm_payment():
         )
         
     except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
     return jsonify({
@@ -341,6 +345,7 @@ def register():
         db.session.add(user)
         db.session.commit()
     except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
     return jsonify({"message": f"Account created successfully, role: {user.role}"}), 201
