@@ -1,5 +1,5 @@
 [project]
-name = "ARH back-end"
+name = "ARH_backend"
 version = "0.1.0"
 description = "Back-end of the ARH (Africa Research Hub)"
 readme = "README.md"
