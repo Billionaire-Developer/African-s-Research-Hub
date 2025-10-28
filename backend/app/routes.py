@@ -27,6 +27,7 @@ def before_request():
 
 
 @app.route("/api/submit", methods=["POST"])
+@login_required
 def submit_abstract():
     data = request.get_json()
     if not data:
@@ -43,7 +44,7 @@ def submit_abstract():
         return jsonify({"error": "Missing required fields"}), 400
 
     allowed_fields = ['Public Health', 'AI', 'Technology', 'Agriculture', 'Mining Engineering']
-    if data['field'] not in allowed_fields:
+    if data['field'].lower() not in [f.lower() for f in allowed_fields]:
         return jsonify({"error": "Invalid field"}), 400
 
     abstract = Abstracts(
@@ -132,11 +133,20 @@ def search_abstracts():
         )
     
     abstracts = query.all()
+    
+    # Return empty list if no results (not an error)
     return jsonify([{
         "id": abstract.id,
         "title": abstract.title,
+        "content": abstract.content,
         "field": abstract.field,
-        "author": abstract.author
+        "institution": abstract.institution,
+        "country": abstract.country,
+        "yearOfResearch": abstract.year,
+        "keywords": abstract.keywords,
+        "status": abstract.status,
+        "authorId": abstract.author_id,
+        "dateSubmitted": abstract.date_submitted.isoformat()
     } for abstract in abstracts]), 200
 
 
@@ -196,15 +206,8 @@ def admin_dashboard():
 
 
 @app.route("/api/payments/initiate", methods=["POST"])
+@login_required
 def initiate_payment():
-    
-    if not current_user.is_authenticated:
-        return jsonify({"error": "User not authenticated"}), 401
-    
-    if current_user.is_authenticated:
-        if current_user.role in ["Admin", "admin"]:
-            return redirect("/api/admin")
-        return redirect("/api/user/dashboard")
     
     data = request.get_json()
     if not data:
@@ -285,8 +288,12 @@ def confirm_payment():
     payment.status = "confirmed"
     payment.payment_date = datetime.now(timezone.utc)
 
+    # Publish abstract after payment
+    abstract.status = 'published'
+
     abstract_id = payment.abstract_id
     invoice = Invoices.query.filter_by(abstract_id=abstract_id).first()
+
     if not invoice:
         return jsonify({"error": "Invoice not found"}), 404
 
@@ -393,11 +400,10 @@ def register():
 
 
 @app.route('api/logout/', method=['POST'])
+@login_required
 def logout():
-    if current_user.is_annonymous:
-        return jsonify({"error": "You are already logged out"})
     logout_user()
-    return jsonify({"error": "You have been logged out"}), 200
+    return jsonify({"message": "You have been logged out"}), 200
 
 
 @app.route("/api/contact/", methods=["POST"])
@@ -463,20 +469,16 @@ def contact():
 
 
 @app.route("/api/user/dashboard", methods=["GET"])
+@login_required
 def user_dashboard():
     """Get student's dashboard info including their abstracts and payment status"""
     
-    if not current_user.is_authenticated or current_user.role != 'student':
+    if current_user.role == 'admin':
         return jsonify({"error": "Student access required"}), 403
-    
-    user = Users.query.get(current_user.id)
-    
-    if user is None:
-        return jsonify({"error": "User not found"}), 404
 
     # Get user's abstracts with related payment/invoice info
     user_abstracts = []
-    for abstract in user.abstracts:
+    for abstract in current_user.abstracts:
         # Get payment info for this abstract
         payment = Payments.query.filter_by(abstract_id=abstract.id).first()
         invoice = Invoices.query.filter_by(abstract_id=abstract.id).first()
@@ -500,20 +502,20 @@ def user_dashboard():
         user_abstracts.append(abstract_data)
 
     # Get user's notifications
-    notifications = Notifications.query.filter_by(user_id=user.id).order_by(Notifications.id.desc()).all()
+    notifications = Notifications.query.filter_by(user_id=current_user.id).order_by(Notifications.id.desc()).all()
     notification_data = [{
-        "id": notif.id,
-        "message": notif.message,
-        "read": notif.read
-    } for notif in notifications]
+        "id": notification.id,
+        "message": notification.message,
+        "read": notification.read
+    } for notification in notifications]
 
     dashboard_data = {
         "user": {
-            "id": user.id,
-            "fullname": user.fullname,
-            "email": user.email,
-            "country": user.country,
-            "role": user.role
+            "id": current_user.id,
+            "fullname": current_user.fullname,
+            "email": current_user.email,
+            "country": current_user.country,
+            "role": current_user.role
         },
         "abstracts": user_abstracts,
         "notifications": notification_data,
@@ -538,17 +540,18 @@ def review_abstract(abstract_id):
         return jsonify({"error": "No data provided"}), 400
 
     action = data.get("action")  # "approve" or "reject"
-    admin_id = data.get("admin_id")
+    admin_id = current_user.id
     feedback_comment = data.get("feedback", "")
 
-    if not all([action, admin_id]):
-        return jsonify({"error": "Missing required fields: action and admin_id"}), 400
+    if not all([action]):
+        return jsonify({"error": "Missing required field: action"}), 400
 
     if action not in ["approve", "reject"]:
         return jsonify({"error": "Action must be 'approve' or 'reject'"}), 400
 
     # Verify admin exists and has admin role
     admin = Users.query.get(admin_id)
+
     if not admin or admin.role != "admin":
         return jsonify({"error": "Unauthorized: Admin access required"}), 403
 
@@ -582,8 +585,8 @@ def review_abstract(abstract_id):
             user_id = abstract.author_id, # type: ignore
             message = notification_message # type: ignore
         )
-        db.session.add(notification)
 
+        db.session.add(notification)
         db.session.commit()
         
         # Send email notification to user
@@ -600,7 +603,7 @@ def review_abstract(abstract_id):
         return jsonify({"error": str(e)}), 500
 
     return jsonify({
-        "message": f"Abstract {action}d successfully",
+        "message": f"Abstract {action}d",
         "abstractId": abstract.id,
         "status": abstract.status,
         "feedbackProvided": bool(feedback_comment)

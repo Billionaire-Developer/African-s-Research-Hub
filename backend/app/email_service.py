@@ -54,8 +54,9 @@ def send_payment_confirmation_email(user_email, user_name, amount, currency, inv
         Dear {user_name},
 
         Your payment of {currency}{amount} has been successfully processed.
-
         Invoice ID: {invoice_id}
+
+        Your abstract has been published. You can view it from your dashboard.
 
         Thank you for your payment!
 
