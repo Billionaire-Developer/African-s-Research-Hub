@@ -3,6 +3,7 @@ from app import app, db
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 from flask import request, jsonify, redirect
+from utilities import admin_required
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import Users, Abstracts, Payments, Invoices, Contact, Notifications, Feedback, Reviews
 from app.email_service import (
@@ -37,15 +38,13 @@ def submit_abstract():
     country = data.get("country")
     year = data.get("year")
     institution = data.get("institution")
-    author_id = data.get("author_id")
 
-    if not all([title, content, field, institution, author_id]):
+    if not all([title, content, field, institution, country, year]):
         return jsonify({"error": "Missing required fields"}), 400
 
-    # Get the user to send confirmation email
-    user = Users.query.get(author_id)
-    if not user:
-        return jsonify({"error": "Author not found"}), 404
+    allowed_fields = ['Public Health', 'AI', 'Technology', 'Agriculture', 'Mining Engineering']
+    if data['field'] not in allowed_fields:
+        return jsonify({"error": "Invalid field"}), 400
 
     abstract = Abstracts(
         title = title, # type: ignore
@@ -54,7 +53,7 @@ def submit_abstract():
         year = year, # type: ignore
         country = country, # type: ignore
         institution = institution, # type: ignore
-        author_id = author_id # type: ignore
+        author_id = current_user.id # type: ignore
     )
     
     try:
@@ -63,8 +62,8 @@ def submit_abstract():
         
         # Send confirmation email to user
         send_abstract_confirmation_email(
-            user_email=user.email,
-            user_name=user.fullname,
+            user_email=current_user.email,
+            user_name=current_user.fullname,
             abstract_title=abstract.title,
             abstract_id=abstract.id
         )
@@ -72,7 +71,7 @@ def submit_abstract():
         # Send notification email to admin
         send_admin_notification_email(
             abstract_title=abstract.title,
-            author_name=user.fullname,
+            author_name=current_user.fullname,
             abstract_id=abstract.id
         )
         
@@ -102,6 +101,45 @@ def get_abstracts():
 } for abstract in abstracts]), 200
 
 
+@app.route("/api/abstracts/search", methods=["GET"])
+def search_abstracts():
+    """Search abstracts with filters"""
+    # Get query parameters
+    field = request.args.get('field')
+    country = request.args.get('country')
+    institution = request.args.get('institution')
+    year = request.args.get('year', type=int)
+    keyword = request.args.get('keyword')
+    
+    # Build query
+    query = Abstracts.query.filter_by(status='published')
+    
+    if field:
+        query = query.filter_by(field=field)
+    if country:
+        query = query.filter_by(country=country)
+    if institution:
+        query = query.filter(Abstracts.institution.ilike(f'%{institution}%'))
+    if year:
+        query = query.filter_by(year=year)
+    if keyword:
+        query = query.filter(
+            db.or_(
+                Abstracts.title.ilike(f'%{keyword}%'),
+                Abstracts.content.ilike(f'%{keyword}%'),
+                Abstracts.keywords.ilike(f'%{keyword}%')
+            )
+        )
+    
+    abstracts = query.all()
+    return jsonify([{
+        "id": abstract.id,
+        "title": abstract.title,
+        "field": abstract.field,
+        "author": abstract.author
+    } for abstract in abstracts]), 200
+
+
 @app.route("/api/abstracts/<int:id>", methods=["GET"])
 def get_specific_abstract(id):
     abstract = Abstracts.query.get(id)
@@ -124,6 +162,7 @@ def get_specific_abstract(id):
 
 
 @app.route("/api/admin", methods=["GET"])
+@admin_required
 def admin_dashboard():
     """Get admin dashboard with overview statistics"""
     # Get all abstracts with counts by status
@@ -303,10 +342,12 @@ def login():
         return jsonify({"error": "Invalid password"}), 401
 
     if user.role in ["Admin", "admin"]:
-        redirect("/api/admin")
+        login_user(user)
+        return redirect("/api/admin")
 
     elif user.role in ["Student", "student"]:
-        redirect("/api/user/dashboard")
+        login_user(user)
+        return redirect("/api/user/dashboard")
 
     return jsonify({"message": "You have been successfully logged in"}), 201
 
@@ -351,7 +392,15 @@ def register():
     return jsonify({"message": f"Account created successfully, role: {user.role}"}), 201
 
 
-@app.route("/api/contact", methods=["POST"])
+@app.route('api/logout/', method=['POST'])
+def logout():
+    if current_user.is_annonymous:
+        return jsonify({"error": "You are already logged out"})
+    logout_user()
+    return jsonify({"error": "You have been logged out"}), 200
+
+
+@app.route("/api/contact/", methods=["POST"])
 def contact():
     data = request.get_json()
     if not data:
@@ -481,6 +530,7 @@ def user_dashboard():
 
 
 @app.route("/api/admin/review/<int:abstract_id>", methods=["POST"])
+@admin_required
 def review_abstract(abstract_id):
     """Admin endpoint to approve/reject abstract with feedback"""
     data = request.get_json()
@@ -749,6 +799,7 @@ def get_review_stats():
 
 
 @app.route('/api/admin/reviews', methods=['GET'])
+@admin_required
 def admin_get_reviews():
 
     """Admin endpoint to get all reviews with user details"""

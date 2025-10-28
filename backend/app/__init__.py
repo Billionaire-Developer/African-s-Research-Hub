@@ -7,7 +7,17 @@ from flask_sqlalchemy import SQLAlchemy
 from app.email_service import mail
 
 app = Flask(__name__)
-CORS(app)
+
+CORS(
+    app, resources={
+        r"/api/*": {
+            "origins": ["http://localhost:3000", "https://yourdomain.com"],
+            "methods": ["GET", "POST", "PUT", "DELETE"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        }
+    }
+)
+
 app.config.from_object('config.Config')
 
 # Initialize extensions
