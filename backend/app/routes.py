@@ -29,19 +29,22 @@ def submit_abstract():
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
+    # Get data
     title = data.get("title")
     content = data.get("content")
     field = data.get("field")
     country = data.get("country")
     year = data.get("year")
     institution = data.get("institution")
-    keywords = data.get("keywords", "")
+    keywords = data.get("keywords")
 
+    # Validate required fields exist
     if not all([title, content, field, institution, country, year]):
         return jsonify({"error": "Missing required fields"}), 400
 
+    # Validate field value (only after confirming it exists)
     allowed_fields = ['Public Health', 'AI', 'Technology', 'Agriculture', 'Mining Engineering']
-    if data['field'].lower() not in [f.lower() for f in allowed_fields]:
+    if field.lower() not in [f.lower() for f in allowed_fields]:
         return jsonify({"error": "Invalid field"}), 400
 
     abstract = Abstracts(
