@@ -1,4 +1,3 @@
-import requests
 from utilities import admin_required
 from datetime import datetime, timezone
 from app import app, db, paychangu_client
@@ -273,36 +272,47 @@ def initiate_payment():
         return jsonify({"error": str(e)}), 500
 
     return jsonify({
-        "message": "Invoice and payment initiated",
+        "message": "Payment initiated",
         "invoiceId": invoice.id,
         "invoiceUrl": invoice.invoice_url,
         "paymentId": payment.id,
         "amount": payment.amount,
         "currency": payment.currency,
         "status": payment.status,
-        "method": payment.method
+        "method": payment.method,
+        "payment_link": payment.payment_link,
     }), 201
 
 
 @app.route("/api/payments/confirm", methods=["POST"])
+@login_required
 def confirm_payment():
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
-    payment_id = data.get("payment_id")
-    if not payment_id:
-        return jsonify({"error": "Missing payment_id"}), 400
+    transaction_id = data.get("transaction_id")
+    if not transaction_id:
+        return jsonify({"error": "Missing transaction_id"}), 400
 
-    payment = Payments.query.get(payment_id)
-    if not payment:
-        return jsonify({"error": "Payment not found"}), 404
-
-    # Get abstract and user info for email
+    # Check abstract ownership
     abstract = Abstracts.query.get(payment.abstract_id)
+    if abstract.authour_id != current_user.id:
+        return jsonify({"error": "Unauthorized: You can only confirm your own payments"}), 403
+    
+    # Check payment status via PayChangu
+    try:
+        payment_check = paychangu_client.verify_transaction(transaction_id)
+    except Exception as e:
+        return jsonify({"error": "Payment verification failed", "details": str(e)}), 500
+    
+    if (payment_check.status != 'success') and (current_user.email != payment_check.data.customer.email):
+        return jsonify({"error": "Payment not successful or still pending or email mismatch"}), 400
+
     user = Users.query.get(abstract.author_id)
 
     # Update payment status, date, and invoice paid status
+    payment = Payments.query.filter_by(transaction_id=transaction_id).first()
     payment.status = "confirmed"
     payment.payment_date = datetime.now(timezone.utc)
 
