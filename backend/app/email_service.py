@@ -1,5 +1,5 @@
 from flask import render_template, current_app
-from flask_mail import Message, Mail # type: ignore
+from flask_mail import Message, Mail
 from threading import Thread
 import logging
 
@@ -21,7 +21,7 @@ def send_email(subject, sender, recipients, text_body, html_body):
     msg.html = html_body
     
     # Send email asynchronously
-    Thread(target=send_async_email, args=(current_app._get_current_object(), msg)).start() # type: ignore
+    Thread(target=send_async_email, args=(current_app._get_current_object(), msg)).start()
 
 def send_abstract_confirmation_email(user_email, user_name, abstract_title, abstract_id):
     """Send confirmation email when abstract is submitted"""

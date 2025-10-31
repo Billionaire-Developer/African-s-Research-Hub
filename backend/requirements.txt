@@ -5,3 +5,4 @@ Flask-Login
 python-dotenv
 Flask-Migrate
 Flask-SQLAlchemy
+paychangu

@@ -10,6 +10,9 @@ class Config(object):
     SECRET_KEY = os.environ.get("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL") or "sqlite:///" + os.path.join(basedir, "app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # PayChangu Configurations
+    PAYCHANGU_SECRET = os.getenv('PAYCHANGU_SECRET')
     
     # Email Configuration for cPanel
     MAIL_SERVER = os.environ.get('MAIL_SERVER')

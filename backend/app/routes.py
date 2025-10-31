@@ -1,9 +1,9 @@
-import os
-from app import app, db
-from dotenv import load_dotenv
-from datetime import datetime, timezone
-from flask import request, jsonify, redirect
+import requests
 from utilities import admin_required
+from datetime import datetime, timezone
+from app import app, db, paychangu_client
+from flask import request, jsonify, redirect, current_app
+from paychangu.models.payment import Payment as PaychanguPayment
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import Users, Abstracts, Payments, Invoices, Contact, Notifications, Feedback, Reviews
 from app.email_service import (
@@ -15,9 +15,6 @@ from app.email_service import (
     send_contact_admin_notification_email
 )
 
-load_dotenv()
-
-WEBSITE_URL = os.environ.get('WEBSITE_URL', 'http://localhost:5000')
 
 @app.before_request
 def before_request():
@@ -48,13 +45,13 @@ def submit_abstract():
         return jsonify({"error": "Invalid field"}), 400
 
     abstract = Abstracts(
-        title = title, # type: ignore
-        content = content, # type: ignore
-        field = field, # type: ignore # type: ignore
-        year = year, # type: ignore
-        country = country, # type: ignore
-        institution = institution, # type: ignore
-        author_id = current_user.id # type: ignore
+        title = title,
+        content = content,
+        field = field,
+        year = year,
+        country = country,
+        institution = institution,
+        author_id = current_user.id
     )
     
     try:
@@ -216,7 +213,7 @@ def initiate_payment():
     abstract_id = data.get("abstract_id")
     amount = data.get("amount", 1.99)
     currency = data.get("currency", "USD")
-    method = data.get("method", "Bank")
+    method = data.get("method", "PayChangu")  # Default to PayChangu
     if not abstract_id:
         return jsonify({"error": "Missing abstract_id"}), 400
 
@@ -225,30 +222,51 @@ def initiate_payment():
     if not abstract:
         return jsonify({"error": "Abstract not found"}), 404
 
-    # Generate invoice URL (dummy for now)
-    invoice_url = f"{WEBSITE_URL}/invoice/{abstract_id}-{datetime.now(timezone.utc).timestamp()}"
-
-    # Create Invoice (only use supported fields)
-    invoice = Invoices(
-        abstract_id = abstract_id, # type: ignore
-        invoice_url = invoice_url, # type: ignore
+    # Initiate PayChangu payment
+    paychangu_payment = PaychanguPayment(
+        amount=amount,
+        currency=currency,
+        email=current_user.email,
+        first_name=current_user.firstname,
+        last_name=current_user.lastname,
+        callback_url=f"{current_app.config['PAYCHANGU_CALLBACK_URL']}",
+        return_url=f"{current_app.config['WEBSITE_URL']}/api/user/dashboard",
+        tx_ref=f"abstract_{abstract_id}_{int(datetime.now().timestamp())}",
+        customization={
+            "title": "African Research Hub Abstract Payment",
+            "description": f"Payment for publishing abstract ID {abstract_id}"
+        }
     )
-    try:
-        db.session.add(invoice)
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
 
-    # Create Payment (only use supported fields)
+    response = paychangu_client.initiate_transaction(paychangu_payment)
+
+    if response.status != 'success':
+        return jsonify({"error": "Failed to initiate payment"}), 500
+
+    payment_link = response.data.checkout_url
+    transaction_id =  response.data.tx_ref
+
+    # Create Payment
     payment = Payments(
-        abstract_id = abstract_id, # type: ignore
-        amount = amount, # type: ignore
-        currency = currency, # type: ignore
-        method = method #type: ignore
+        abstract_id = abstract_id,
+        amount = amount,
+        currency = currency,
+        method = method,
+        transaction_id = transaction_id,
+        payment_link = payment_link
     )
+    
+    # Generate payment link from PayChangu
+    invoice_url = payment.payment_link
+
+    # Create Invoice
+    invoice = Invoices(
+        abstract_id = abstract_id,
+        invoice_url = invoice_url,
+    )
+
     try:
-        db.session.add(payment)
+        db.session.add_all([invoice, payment])
         db.session.commit()
     except Exception as e:
         db.session.rollback()
@@ -282,7 +300,7 @@ def confirm_payment():
 
     # Get abstract and user info for email
     abstract = Abstracts.query.get(payment.abstract_id)
-    user = Users.query.get(abstract.author_id) # type: ignore
+    user = Users.query.get(abstract.author_id)
 
     # Update payment status, date, and invoice paid status
     payment.status = "confirmed"
@@ -304,8 +322,8 @@ def confirm_payment():
         
         # Send payment confirmation email
         send_payment_confirmation_email(
-            user_email=user.email, # type: ignore
-            user_name=user.fullname, # type: ignore
+            user_email=user.email,
+            user_name=user.fullname,
             amount=payment.amount,
             currency=payment.currency,
             invoice_id=invoice.id
@@ -383,12 +401,12 @@ def register():
         return jsonify({"error": "Email already exists"}), 400
 
     user = Users(
-        fullname = fullname, # type: ignore
-        email = email, # type: ignore
-        country = country, # type: ignore
-        role = role # type: ignore
+        fullname = fullname,
+        email = email,
+        country = country,
+        role = role
     )
-    user.set_password(password) # type: ignore
+    user.set_password(password)
     try:
         db.session.add(user)
         db.session.commit()
@@ -399,7 +417,7 @@ def register():
     return jsonify({"message": f"Account created successfully, role: {user.role}"}), 201
 
 
-@app.route('api/logout/', method=['POST'])
+@app.route('/api/logout/', methods=['POST'])
 @login_required
 def logout():
     logout_user()
@@ -435,9 +453,9 @@ def contact():
         return jsonify({"error": "Name must be at least 2 characters long"}), 400
 
     contact = Contact(
-        name = name.strip(), # type: ignore
-        email = email.strip().lower(), # type: ignore
-        message = message.strip() # type: ignore
+        name = name.strip(),
+        email = email.strip().lower(),
+        message = message.strip()
     )
 
     try:
@@ -574,16 +592,16 @@ def review_abstract(abstract_id):
         # Add feedback if provided
         if feedback_comment:
             feedback = Feedback(
-                abstract_id = abstract_id, # type: ignore
-                admin_id = admin_id, # type: ignore
-                comment = feedback_comment # type: ignore
+                abstract_id = abstract_id,
+                admin_id = admin_id,
+                comment = feedback_comment
             )
             db.session.add(feedback)
 
         # Add notification for the author
         notification = Notifications(
-            user_id = abstract.author_id, # type: ignore
-            message = notification_message # type: ignore
+            user_id = abstract.author_id,
+            message = notification_message
         )
 
         db.session.add(notification)
@@ -591,8 +609,8 @@ def review_abstract(abstract_id):
         
         # Send email notification to user
         send_abstract_review_email(
-            user_email=user.email, # type: ignore
-            user_name=user.fullname, # type: ignore
+            user_email=user.email,
+            user_name=user.fullname,
             abstract_title=abstract.title,
             status=abstract.status,
             feedback=feedback_comment if feedback_comment else None
@@ -656,8 +674,8 @@ def resubmit_abstract(abstract_id):
     try:
         # Add notification for successful resubmission
         notification = Notifications(
-            user_id = user_id, # type: ignore
-            message = f"Your abstract '{abstract.title}' has been resubmitted successfully!" # type: ignore
+            user_id = user_id,
+            message = f"Your abstract '{abstract.title}' has been resubmitted successfully!"
         )
         db.session.add(notification)
         db.session.commit()
@@ -701,9 +719,9 @@ def submit_review():
     
     # Create review
     review = Reviews(
-        rating=rating, # type: ignore
-        comment=comment if comment else None, # type: ignore
-        user_id=current_user.id if current_user.is_authenticated else None # type: ignore
+        rating=rating,
+        comment=comment if comment else None,
+        user_id=current_user.id if current_user.is_authenticated else None
     )
     
     try:

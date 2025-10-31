@@ -1,5 +1,5 @@
 from app import db, login
-from flask_login import UserMixin # type: ignore
+from flask_login import UserMixin
 from datetime import datetime, timezone, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -11,8 +11,10 @@ def load_user(id):
 
 class Users(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
-    fullname = db.Column(db.String(128), nullable=False)
-    email = db.Column(db.String(128), unique=True, index=True)
+    firstname = db.Column(db.String(128), nullable=False)
+    lastname = db.Column(db.String(80), nullable=False)
+    email = db.Column(db.String(80), unique=True, index=True)
+    fullname = db.Column(db.String(225), nullable=False)
     country = db.Column(db.String(64), nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     last_seen = db.Column(db.DateTime, default=datetime.now(timezone.utc), index=True)
@@ -54,6 +56,11 @@ class Payments(UserMixin, db.Model):
     payment_date = db.Column(db.DateTime, nullable=True)
     method = db.Column(db.String(64), default='Bank')
     abstract = db.relationship('Abstracts', backref=db.backref('payments', lazy=True))
+    transaction_id = db.Column(db.String(128), nullable=True)  # PayChangu transaction ID
+    payment_link = db.Column(db.String(255), nullable=True)    # Generated checkout URL
+
+    # Realationship to Invoices
+    invoice = db.relationship('Invoices', backref='payment', uselist=False)
     
     def __repr__(self):
         return f'''<Payment ID: {self.id}, Abstract ID: {self.abstract_id}, Currency: {self.currency}\n,
@@ -62,12 +69,15 @@ class Payments(UserMixin, db.Model):
 class Invoices(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
-    invoice_url = db.Column(db.String(255), index=True)
+    invoice_url = db.Column(db.String(255), index=True, nullable=False)
     amount = db.Column(db.Float, default=1.99, nullable=False)
     generated_date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     due_date = db.Column(db.DateTime, default=datetime.now(timezone.utc) + timedelta(weeks=2), nullable=True)
     paid = db.Column(db.Boolean, default=False, index=True)
     abstract = db.relationship('Abstracts', backref=db.backref('invoices', lazy=True))
+
+    # Realationship to Payments
+    payment_id = db.Column(db.Integer, db.ForeignKey('payments.id'), nullable=True)
     
     
     def __repr__(self):
