@@ -13,8 +13,8 @@ class Config(object):
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Session Configuration
-    SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin
-    SESSION_COOKIE_SECURE = True      # Required if using HTTPS (set to False for local dev)
+    SESSION_COOKIE_SAMESITE = 'Lax'  # Changed from 'None'
+    SESSION_COOKIE_SECURE = os.environ.get('FLASK_ENV') == 'production'  # Only secure in production
     SESSION_COOKIE_HTTPONLY = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
 
