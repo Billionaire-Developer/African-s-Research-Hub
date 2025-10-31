@@ -6,3 +6,4 @@ python-dotenv
 Flask-Migrate
 Flask-SQLAlchemy
 paychangu
+email-validator

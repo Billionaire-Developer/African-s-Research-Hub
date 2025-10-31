@@ -16,7 +16,8 @@ CORS(
         r"/api/*": {
             "origins": ["http://localhost:3000", "https://yourdomain.com"],
             "methods": ["GET", "POST", "PUT", "DELETE"],
-            "allow_headers": ["Content-Type", "Authorization"]
+            "allow_headers": ["Content-Type", "Authorization"],
+            "support_credentials": True
         }
     }
 )

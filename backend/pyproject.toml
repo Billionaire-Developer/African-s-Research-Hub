@@ -5,6 +5,7 @@ description = "Back-end of the ARH (Africa Research Hub)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "email-validator>=2.3.0",
     "flask>=3.1.2",
     "flask-cors>=6.0.1",
     "flask-login>=0.6.3",

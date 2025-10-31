@@ -1,6 +1,7 @@
 from functools import wraps
 from flask import jsonify
 from flask_login import current_user
+from email_validator import validate_email
 
 
 def admin_required(f):
@@ -12,3 +13,12 @@ def admin_required(f):
             return jsonify({"error": "Admin access required"}), 403
         return f(*args, **kwargs)
     return decorated_function
+
+
+def validate_email(email):
+    """Validate email format"""
+    try:
+        valid = validate_email(email)
+        return valid.email
+    except Exception:
+        return None

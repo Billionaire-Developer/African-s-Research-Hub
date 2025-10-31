@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -10,6 +11,12 @@ class Config(object):
     SECRET_KEY = os.environ.get("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL") or "sqlite:///" + os.path.join(basedir, "app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Session Configuration
+    SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin
+    SESSION_COOKIE_SECURE = True      # Required if using HTTPS (set to False for local dev)
+    SESSION_COOKIE_HTTPONLY = True
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
 
     # PayChangu Configurations
     PAYCHANGU_SECRET = os.getenv('PAYCHANGU_SECRET')

@@ -1,7 +1,7 @@
-from utilities import admin_required
 from datetime import datetime, timezone
 from app import app, db, paychangu_client
-from flask import request, jsonify, redirect, current_app
+from flask import request, jsonify, current_app
+from utilities import admin_required, validate_email
 from paychangu.models.payment import Payment as PaychanguPayment
 from flask_login import current_user, login_user, logout_user, login_required
 from app.models import Users, Abstracts, Payments, Invoices, Contact, Notifications, Feedback, Reviews
@@ -35,6 +35,7 @@ def submit_abstract():
     country = data.get("country")
     year = data.get("year")
     institution = data.get("institution")
+    keywords = data.get("keywords", "")
 
     if not all([title, content, field, institution, country, year]):
         return jsonify({"error": "Missing required fields"}), 400
@@ -50,7 +51,8 @@ def submit_abstract():
         year = year,
         country = country,
         institution = institution,
-        author_id = current_user.id
+        author_id = current_user.id,
+        keywords = keywords
     )
     
     try:
@@ -354,9 +356,9 @@ def confirm_payment():
 @app.route("/api/login", methods=["POST"])
 def login():
     if current_user.is_authenticated:
-        if current_user.role in ["Admin", "admin"]:
-            return redirect("/api/admin")
-        return redirect("/api/user/dashboard")
+        if current_user.role.lower() == "admin":
+            return jsonify({"role": "admin", "redirect": "/admin"}), 200
+        return jsonify({"role": "student", "redirect": "/dashboard"}), 200
 
     data = request.get_json()
     if not data:
@@ -376,13 +378,21 @@ def login():
     elif user.verify_password(password) == False:
         return jsonify({"error": "Invalid password"}), 401
 
-    if user.role in ["Admin", "admin"]:
+    if user.role.lower() == "admin":
         login_user(user)
-        return redirect("/api/admin")
+        return jsonify({
+            "message": "Login successful",
+            "role": "admin",
+            "redirect": "/admin"
+        }), 200
 
-    elif user.role in ["Student", "student"]:
+    elif user.role.lower() == "student":
         login_user(user)
-        return redirect("/api/user/dashboard")
+        return jsonify({
+            "message": "Login successful", 
+            "role": "student",
+            "redirect": "/dashboard"
+        }), 200
 
     return jsonify({"message": "You have been successfully logged in"}), 201
 
@@ -390,9 +400,17 @@ def login():
 @app.route("/api/register", methods=["POST"])
 def register():
     if current_user.is_authenticated:
-        if current_user.role in ["Admin", "admin"]:
-            return redirect("/api/admin")
-        return redirect("/api/user/dashboard")
+        if current_user.role.lower() == "admin":
+            return jsonify({
+                "message": "Logout to create a new account",
+                "role": "admin",
+                "redirect": "/admin"
+            }), 200
+        return jsonify({
+            "message": "Logout to create a new account",
+            "role": "student",
+            "redirect": "/dashboard"
+        }), 200
 
     data = request.get_json()
     if not data:
@@ -448,7 +466,7 @@ def contact():
         return jsonify({"error": "Missing required fields: name, email, and message"}), 400
 
     # Basic email validation
-    if "@" not in email or "." not in email:
+    if not validate_email(email):
         return jsonify({"error": "Invalid email format"}), 400
 
     # Validate message length
@@ -501,7 +519,7 @@ def contact():
 def user_dashboard():
     """Get student's dashboard info including their abstracts and payment status"""
     
-    if current_user.role == 'admin':
+    if current_user.role.lower() == 'admin':
         return jsonify({"error": "Student access required"}), 403
 
     # Get user's abstracts with related payment/invoice info

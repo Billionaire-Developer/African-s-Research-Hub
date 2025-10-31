@@ -27,7 +27,7 @@ class Users(UserMixin, db.Model):
         return f"<User ID: {self.id}, Fullname: {self.fullname}, Email: {self.email}, Role: {self.role}>"
 
 
-class Abstracts(UserMixin, db.Model):
+class Abstracts(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     title = db.Column(db.String(256), nullable=False)
     content = db.Column(db.String(), nullable=False)
@@ -44,7 +44,7 @@ class Abstracts(UserMixin, db.Model):
         return f'<Abstract: {self.title}, Abstract ID: {self.id} Status: {self.status}>'
 
 
-class Payments(UserMixin, db.Model):
+class Payments(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
     amount = db.Column(db.Float, default=1.99, nullable=False)
@@ -64,7 +64,7 @@ class Payments(UserMixin, db.Model):
     Amount: {self.amount}, Method: {self.method}, Status: {self.status}'''
     
 
-class Invoices(UserMixin, db.Model):
+class Invoices(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
     invoice_url = db.Column(db.String(255), index=True, nullable=False)
@@ -82,7 +82,7 @@ class Invoices(UserMixin, db.Model):
     Due Date: {self.due_date}, Paid: {self.paid}\n Invoice URL:{self.invoice_url}'''
 
 
-class Feedback(UserMixin, db.Model):
+class Feedback(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
     admin_id = db.Column(db.Integer, index=True)
@@ -93,7 +93,7 @@ class Feedback(UserMixin, db.Model):
         return f"<Feedback ID: {self.id}, Abstract ID: {self.abstract_id}, Admin ID: {self.admin_id}, Created At: {self.created_at}>"
 
 
-class Notifications(UserMixin, db.Model):
+class Notifications(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     message = db.Column(db.String(255), nullable=False)
@@ -103,7 +103,7 @@ class Notifications(UserMixin, db.Model):
         return f"<NOtification ID: {self.id}, User ID: {self.user_id}, Read: {self.read}>"
 
 
-class BlogPosts(UserMixin, db.Model):
+class BlogPosts(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     author = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     body = db.Column(db.String(510), nullable=False)
@@ -113,7 +113,7 @@ class BlogPosts(UserMixin, db.Model):
         return f"<BlogPost ID: {self.id}, Author: {self.author}, Created At: {self.created_at}>"
 
 
-class Contact(UserMixin, db.Model):
+class Contact(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     name = db.Column(db.String(128), nullable=False)
     email = db.Column(db.String(128), nullable=False, index=True)
