@@ -53,11 +53,11 @@ class Payments(UserMixin, db.Model):
     amount = db.Column(db.Float, default=1.99, nullable=False)
     currency = db.Column(db.String(64), default='USD')
     status = db.Column(db.String(64), default='pending', index=True)
-    payment_date = db.Column(db.DateTime, nullable=True)
-    method = db.Column(db.String(64), default='Bank')
+    payment_date = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
+    method = db.Column(db.String(64), default='PayChangu', nullable=False)
     abstract = db.relationship('Abstracts', backref=db.backref('payments', lazy=True))
-    transaction_id = db.Column(db.String(128), nullable=True)  # PayChangu transaction ID
-    payment_link = db.Column(db.String(255), nullable=True)    # Generated checkout URL
+    transaction_id = db.Column(db.String(128), nullable=False) # PayChangu transaction ID
+    payment_link = db.Column(db.String(255), nullable=False) # Generated checkout URL
 
     # Realationship to Invoices
     invoice = db.relationship('Invoices', backref='payment', uselist=False)
