@@ -4,11 +4,6 @@ from datetime import datetime, timezone, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
-@login.user_loader
-def load_user(id):
-    return Users.query.get(int(id))
-
-
 class Users(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     firstname = db.Column(db.String(128), nullable=False)
@@ -30,7 +25,8 @@ class Users(UserMixin, db.Model):
     
     def __repr__(self):
         return f"<User ID: {self.id}, Fullname: {self.fullname}, Email: {self.email}, Role: {self.role}>"
-    
+
+
 class Abstracts(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     title = db.Column(db.String(256), nullable=False)
@@ -46,6 +42,7 @@ class Abstracts(UserMixin, db.Model):
 
     def __repr__(self):
         return f'<Abstract: {self.title}, Abstract ID: {self.id} Status: {self.status}>'
+
 
 class Payments(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
@@ -66,6 +63,7 @@ class Payments(UserMixin, db.Model):
         return f'''<Payment ID: {self.id}, Abstract ID: {self.abstract_id}, Currency: {self.currency}\n,
     Amount: {self.amount}, Method: {self.method}, Status: {self.status}'''
     
+
 class Invoices(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     abstract_id = db.Column(db.Integer, db.ForeignKey('abstracts.id'), index=True)
@@ -79,10 +77,10 @@ class Invoices(UserMixin, db.Model):
     # Realationship to Payments
     payment_id = db.Column(db.Integer, db.ForeignKey('payments.id'), nullable=True)
     
-    
     def __repr__(self):
         return f'''<Invoice ID: {self.id}, Abstract ID: {self.abstract_id}, Generated At: {self.generated_date}, 
     Due Date: {self.due_date}, Paid: {self.paid}\n Invoice URL:{self.invoice_url}'''
+
 
 class Feedback(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
@@ -94,6 +92,7 @@ class Feedback(UserMixin, db.Model):
     def __repr__(self):
         return f"<Feedback ID: {self.id}, Abstract ID: {self.abstract_id}, Admin ID: {self.admin_id}, Created At: {self.created_at}>"
 
+
 class Notifications(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
@@ -102,6 +101,7 @@ class Notifications(UserMixin, db.Model):
     
     def __repr__(self):
         return f"<NOtification ID: {self.id}, User ID: {self.user_id}, Read: {self.read}>"
+
 
 class BlogPosts(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
@@ -112,6 +112,7 @@ class BlogPosts(UserMixin, db.Model):
     def __repr__(self):
         return f"<BlogPost ID: {self.id}, Author: {self.author}, Created At: {self.created_at}>"
 
+
 class Contact(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     name = db.Column(db.String(128), nullable=False)
@@ -121,6 +122,7 @@ class Contact(UserMixin, db.Model):
     
     def __repr__(self):
         return f"<Contact ID: {self.id}, Name: {self.name}, Email: {self.email}, Created At: {self.created_at}>"
+
 
 class Reviews(db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
@@ -141,3 +143,8 @@ class Reviews(db.Model):
     
     def __repr__(self):
         return f"<Review ID: {self.id}, Rating: {self.rating}, User: {self.user_id}>"
+
+
+@login.user_loader
+def load_user(id):
+    return Users.query.get(int(id))
