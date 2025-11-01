@@ -12,6 +12,11 @@ class Config(object):
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL") or "sqlite:///" + os.path.join(basedir, "app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+     # JWT Configuration
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or SECRET_KEY
+    JWT_ALGORITHM = 'HS256'
+    PASSWORD_RESET_TOKEN_EXPIRY = timedelta(minutes=5)
+
     # Session Configuration
     SESSION_COOKIE_SAMESITE = 'Lax'  # Changed from 'None'
     SESSION_COOKIE_SECURE = os.environ.get('FLASK_ENV') == 'production'  # Only secure in production

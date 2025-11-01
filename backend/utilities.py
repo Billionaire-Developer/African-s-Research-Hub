@@ -3,7 +3,6 @@ from flask import jsonify
 from flask_login import current_user
 from email_validator import validate_email
 
-
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -22,3 +21,4 @@ def validate_email(email):
         return valid.email
     except Exception:
         return None
+    

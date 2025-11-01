@@ -227,3 +227,4 @@ def send_contact_admin_notification_email(contact_name, contact_email, contact_m
         """
     
     send_email(subject, current_app.config['MAIL_DEFAULT_SENDER'], [admin_email], text_body, html_body)
+

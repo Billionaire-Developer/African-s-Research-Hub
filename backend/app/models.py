@@ -145,6 +145,32 @@ class Reviews(db.Model):
         return f"<Review ID: {self.id}, Rating: {self.rating}, User: {self.user_id}>"
 
 
+class PasswordResetToken(db.Model):
+    """Stores password reset tokens with expiry"""
+    __tablename__ = 'password_reset_tokens'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(db.String(500), unique=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+    
+    # Relationship
+    user = db.relationship('Users', backref='reset_tokens')
+    
+    def __repr__(self):
+        return f'<PasswordResetToken {self.token[:20]}... for user {self.user_id}>'
+    
+    def is_expired(self):
+        """Check if token has expired"""
+        return datetime.now(timezone.utc) > self.expires_at
+    
+    def is_valid(self):
+        """Check if token is valid (not used and not expired)"""
+        return not self.used and not self.is_expired()
+
+
 @login.user_loader
 def load_user(id):
     return Users.query.get(int(id))
