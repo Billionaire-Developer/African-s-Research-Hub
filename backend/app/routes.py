@@ -89,9 +89,7 @@ def submit_abstract():
 
 @app.route("/api/abstracts", methods=["GET"])
 def get_abstracts():
-    abstracts = Abstracts.query.all()
-    if not abstracts:
-        return jsonify({"error": "No abstracts found"}), 404
+    abstracts = Abstracts.query.filter_by(status="published").all()
     return jsonify([{
     "id": abstract.id,
     "title": abstract.title,
