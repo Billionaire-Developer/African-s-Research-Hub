@@ -1,8 +1,9 @@
 import jwt
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from flask import current_app
 from app import db
 from app.models import PasswordResetToken
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
 def generate_reset_token(user):
     """
@@ -10,7 +11,7 @@ def generate_reset_token(user):
     Returns: token string
     """
     # Create JWT payload
-    expiry = datetime.n0w(timezone.utc) + current_app.config['PASSWORD_RESET_TOKEN_EXPIRY']
+    expiry = datetime.now(timezone.utc) + current_app.config['PASSWORD_RESET_TOKEN_EXPIRY']
     payload = {
         'user_id': user.id,
         'email': user.email,
@@ -65,15 +66,16 @@ def verify_reset_token(token):
         
         return user, reset_token
         
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         current_app.logger.warning("Password reset token has expired")
         return None
-    except jwt.InvalidTokenError as e:
+    except InvalidTokenError as e:
         current_app.logger.warning(f"Invalid password reset token: {str(e)}")
         return None
     except Exception as e:
         current_app.logger.error(f"Error verifying reset token: {str(e)}")
         return None
+
 
 def invalidate_token(reset_token):
     """Mark token as used and delete it"""
@@ -84,6 +86,7 @@ def invalidate_token(reset_token):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error invalidating token: {str(e)}")
+
 
 def cleanup_expired_tokens():
     """Delete all expired tokens from database"""
