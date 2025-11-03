@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import jsonify
 from flask_login import current_user
-from email_validator import validate_email
+from email_validator import validate_email, EmailNotValidError
 
 def admin_required(f):
     @wraps(f)
@@ -25,11 +25,9 @@ def student_required(f):
     return decorated_function
 
 
-def validate_email(email):
-    """Validate email format"""
+def is_valid_email(email):
     try:
         valid = validate_email(email)
         return valid.email
-    except Exception:
+    except EmailNotValidError:
         return None
-    
