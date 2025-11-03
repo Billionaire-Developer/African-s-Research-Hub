@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 from app import app, db, paychangu_client
 from flask import request, jsonify, current_app
 from werkzeug.security import generate_password_hash
-from utilities import admin_required, validate_email
 from app.utils.email import send_password_reset_email
 from paychangu.models.payment import Payment as PaychanguPayment
+from utilities import admin_required, student_required, validate_email
 from flask_login import current_user, login_user, logout_user, login_required
 from app.utils.tokens import generate_reset_token, verify_reset_token, invalidate_token
 from app.models import Users, Abstracts, Payments, Invoices, Contact, Notifications, Feedback, Reviews
