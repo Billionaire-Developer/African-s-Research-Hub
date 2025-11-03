@@ -106,6 +106,7 @@ def get_abstracts():
 } for abstract in abstracts]), 200
 
 
+#TODO: test
 @app.route("/api/abstracts/search", methods=["GET"])
 def search_abstracts():
     """Search abstracts with filters"""
@@ -234,8 +235,6 @@ def initiate_payment():
         amount=amount,
         currency=currency,
         email=current_user.email,
-        first_name=current_user.firstname,
-        last_name=current_user.lastname,
         callback_url=f"{current_app.config['PAYCHANGU_CALLBACK_URL']}",
         return_url=f"{current_app.config['WEBSITE_URL']}/api/user/dashboard",
         tx_ref=f"abstract_{abstract_id}_{int(datetime.now().timestamp())}",
@@ -428,7 +427,7 @@ def register():
     password = data.get("password")
     role = data.get("role")
 
-    if not all([fullname, email, country, password, role]):
+    if not all([fullname, email, country, password]):
         return jsonify({"error": "Missing required fields"}), 400
 
     if Users.query.filter_by(email=email).first():
@@ -448,7 +447,7 @@ def register():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({"message": f"Account created successfully, role: {user.role}"}), 201
+    return jsonify({"message": f"Account created successfully", "role": f"{user.role}"}), 201
 
 
 @app.route('/api/logout/', methods=['POST'])
@@ -525,7 +524,7 @@ def contact():
 def user_dashboard():
     """Get student's dashboard info including their abstracts and payment status"""
     
-    if current_user.role.lower() == 'admin':
+    if current_user.role.lower() != 'student':
         return jsonify({"error": "Student access required"}), 403
 
     # Get user's abstracts with related payment/invoice info
@@ -663,22 +662,18 @@ def review_abstract(abstract_id):
 
 
 @app.route("/api/resubmit/<int:abstract_id>", methods=["POST"])
+@login_required
 def resubmit_abstract(abstract_id):
     """Allow students to update and resubmit rejected abstracts"""
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
 
-    user_id = data.get("user_id")
-    if not user_id:
-        return jsonify({"error": "Missing user_id"}), 400
+    data = request.get_json()
 
     abstract = Abstracts.query.get(abstract_id)
     if abstract is None:
         return jsonify({"error": "Abstract not found"}), 404
 
     # Verify the user owns this abstract
-    if abstract.author_id != user_id:
+    if abstract.author_id != current_user.id:
         return jsonify({"error": "Unauthorized: You can only resubmit your own abstracts"}), 403
 
     # Only allow resubmission of rejected abstracts
@@ -708,7 +703,7 @@ def resubmit_abstract(abstract_id):
     try:
         # Add notification for successful resubmission
         notification = Notifications(
-            user_id = user_id,
+            user_id = current_user.id,
             message = f"Your abstract '{abstract.title}' has been resubmitted successfully!"
         )
         db.session.add(notification)
@@ -770,6 +765,7 @@ def submit_review():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": "Failed to save review"}), 500
+
 
 @app.route('/api/reviews', methods=['GET'])
 def get_reviews():
