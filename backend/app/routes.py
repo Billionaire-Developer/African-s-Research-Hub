@@ -605,6 +605,9 @@ def review_abstract(abstract_id):
         return jsonify({"error": "Unauthorized: Admin access required"}), 403
 
     abstract = Abstracts.query.get(abstract_id)
+
+    if abstract.status == "approved" or abstract.status == "publishedd":
+        return jsonify({"error": "Abstract already approved"}), 400
     
     if abstract is None:
         return jsonify({"error": "Abstract not found"}), 404
