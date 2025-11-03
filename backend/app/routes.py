@@ -889,7 +889,7 @@ def request_password_reset():
         
         if not user:
             return jsonify({
-                "message": "If an account exists with this email, a password reset link has been sent."
+                "message": "If an account exists with this email, a password reset link has been sent. Check your spam if not received"
             }), 200
         
         token = generate_reset_token(user)
