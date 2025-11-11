@@ -12,6 +12,9 @@ class Config(object):
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL") or "sqlite:///" + os.path.join(basedir, "app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Abstract Publication Fee
+    ABSTRACT_PUBLICATION_FEE = os.environ.get('ABSTRACT_PUBLICATION_FEE') or 1.99
+
      # JWT Configuration
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or SECRET_KEY
     JWT_ALGORITHM = 'HS256'

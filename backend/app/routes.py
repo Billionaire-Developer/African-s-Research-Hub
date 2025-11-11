@@ -217,7 +217,7 @@ def initiate_payment():
         return jsonify({"error": "No data provided"}), 400
 
     abstract_id = data.get("abstract_id")
-    amount = data.get("amount", 1.99)
+    amount = current_app.config.get("ABSTRACT_PUBLICATION_FEE", 1.99)  # Default to 1.99 USD
     currency = data.get("currency", "USD")
     method = data.get("method", "PayChangu")  # Default to PayChangu
     if not abstract_id:
@@ -247,8 +247,8 @@ def initiate_payment():
     if response.status != 'success':
         return jsonify({"error": "Failed to initiate payment"}), 500
 
-    payment_link = response.data.checkout_url
-    transaction_id =  response.data.tx_ref
+    payment_link = response['data']['checkout_url']
+    transaction_id =  response['data']['tx_ref']
 
     # Create Payment
     payment = Payments(
@@ -592,17 +592,11 @@ def review_abstract(abstract_id):
     admin_id = current_user.id
     feedback_comment = data.get("feedback", "")
 
-    if not all([action]):
+    if not action:
         return jsonify({"error": "Missing required field: action"}), 400
 
     if action not in ["approve", "reject"]:
         return jsonify({"error": "Action must be 'approve' or 'reject'"}), 400
-
-    # Verify admin exists and has admin role
-    admin = Users.query.get(admin_id)
-
-    if not admin or admin.role != "admin":
-        return jsonify({"error": "Unauthorized: Admin access required"}), 403
 
     abstract = Abstracts.query.get(abstract_id)
 
