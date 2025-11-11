@@ -302,7 +302,7 @@ def confirm_payment():
 
     # Check abstract ownership
     abstract = Abstracts.query.get(payment.abstract_id)
-    if abstract.authour_id != current_user.id:
+    if abstract.author_id != current_user.id:
         return jsonify({"error": "Unauthorized: You can only confirm your own payments"}), 403
     
     # Check payment status via PayChangu
