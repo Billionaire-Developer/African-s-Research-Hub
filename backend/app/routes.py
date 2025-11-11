@@ -209,7 +209,7 @@ def admin_dashboard():
 
 
 @app.route("/api/payments/initiate", methods=["POST"])
-@admin_required
+@student_required
 def initiate_payment():
     
     data = request.get_json()
@@ -518,7 +518,7 @@ def contact():
 
 
 @app.route("/api/user/dashboard", methods=["GET"])
-@admin_required
+@student_required
 def user_dashboard():
     """Get student's dashboard info including their abstracts and payment status"""
     
@@ -663,7 +663,7 @@ def review_abstract(abstract_id):
 
 
 @app.route("/api/resubmit/<int:abstract_id>", methods=["POST"])
-@admin_required
+@student_required
 def resubmit_abstract(abstract_id):
     """Allow students to update and resubmit rejected abstracts"""
 
