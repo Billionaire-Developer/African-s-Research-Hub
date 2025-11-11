@@ -290,7 +290,7 @@ def initiate_payment():
 
 
 @app.route("/api/payments/confirm", methods=["POST"])
-@admin_required
+@student_required
 def confirm_payment():
     data = request.get_json()
     if not data:
