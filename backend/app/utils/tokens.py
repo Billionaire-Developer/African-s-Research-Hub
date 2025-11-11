@@ -16,7 +16,7 @@ def generate_reset_token(user):
         'user_id': user.id,
         'email': user.email,
         'exp': expiry,
-        'iat': datetime.n0w(timezone.utc),
+        'iat': datetime.now(timezone.utc),
         'type': 'password_reset'
     }
     
@@ -92,7 +92,7 @@ def cleanup_expired_tokens():
     """Delete all expired tokens from database"""
     try:
         expired = PasswordResetToken.query.filter(
-            PasswordResetToken.expires_at < datetime.n0w(timezone.utc)
+            PasswordResetToken.expires_at < datetime.now(timezone.utc)
         ).all()
         
         for token in expired:
