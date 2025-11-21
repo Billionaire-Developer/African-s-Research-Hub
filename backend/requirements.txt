@@ -8,3 +8,4 @@ Flask-SQLAlchemy
 paychangu
 email-validator
 pyjwt
+psycopg2-binary
