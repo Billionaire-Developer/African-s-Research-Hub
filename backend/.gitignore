@@ -10,6 +10,9 @@ instance/
 *.sqlite
 *.sqlite3
 
+# Uploaded files
+uploads/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -36,8 +39,3 @@ logs/
 
 # Documentation
 docs/_build/
-
-# Flask-Migrate
-# migrations/versions/*.py
-# !migrations/versions/__init__.py
-
