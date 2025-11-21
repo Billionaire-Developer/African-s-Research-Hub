@@ -285,6 +285,41 @@ def initiate_payment():
         "currency": payment.currency,
         "status": payment.status,
         "method": payment.method,
+# def reset_password():
+#     """ API endpoint for password reset """
+
+#     try:
+#         data = request.get_json()
+#         token = request.args.get('token')
+#         new_password = data.get('password')
+#         confirm_password = data.get('confirm_password')
+        
+#         if not all([token, new_password, confirm_password]):
+#             return jsonify({"error": "All fields are required"}), 400
+        
+#         if new_password != confirm_password:
+#             return jsonify({"error": "Passwords do not match"}), 400
+        
+#         result = verify_reset_token(token)
+#         if not result:
+#             return jsonify({"error": "Invalid or expired reset token"}), 400
+        
+#         user, reset_token = result
+        
+#         user.password = generate_password_hash(new_password)
+#         invalidate_token(reset_token)
+#         db.session.commit()
+        
+#         return jsonify({"message": "Password has been reset successfully"}), 200
+        
+#     except Exception as e:
+#         db.session.rollback()
+#         return jsonify({
+#             "error": "An error occurred. Please try again.",
+#             "details": str(e)
+#         }), 500
+
+
         "payment_link": payment.payment_link,
     }), 201
 
