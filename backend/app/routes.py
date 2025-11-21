@@ -1,21 +1,49 @@
+import os
 from datetime import datetime, timezone
-from app import app, db, paychangu_client
-from flask import request, jsonify, current_app
-from werkzeug.security import generate_password_hash
-from app.utils.email import send_password_reset_email
+
+from flask import current_app, jsonify, request, send_file
+from flask_login import current_user, login_required, login_user, logout_user
 from paychangu.models.payment import Payment as PaychanguPayment
-from utilities import admin_required, student_required, is_valid_email
-from flask_login import current_user, login_user, logout_user, login_required
-from app.utils.tokens import generate_reset_token, verify_reset_token, invalidate_token
-from app.models import Users, Abstracts, Payments, Invoices, Contact, Notifications, Feedback, Reviews
+from werkzeug.security import generate_password_hash
+from werkzeug.utils import secure_filename
+
+from app import app, db, paychangu_client
 from app.email_service import (
-    send_abstract_confirmation_email, 
-    send_payment_confirmation_email,
+    send_abstract_confirmation_email,
     send_abstract_review_email,
     send_admin_notification_email,
+    send_contact_admin_notification_email,
     send_contact_confirmation_email,
-    send_contact_admin_notification_email
+    send_payment_confirmation_email,
 )
+from app.models import (
+    Abstracts,
+    Contact,
+    Feedback,
+    Invoices,
+    Notifications,
+    Payments,
+    Reviews,
+    Users,
+)
+from app.utils.email import send_password_reset_email
+from app.utils.tokens import generate_reset_token, invalidate_token, verify_reset_token
+from utilities import admin_required, is_valid_email, student_required
+
+# File upload configuration
+UPLOAD_FOLDER = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "uploads", "abstracts"
+)
+ALLOWED_EXTENSIONS = {"pdf"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Ensure upload directory exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 @app.before_request
@@ -28,150 +56,358 @@ def before_request():
 @app.route("/api/submit", methods=["POST"])
 @student_required
 def submit_abstract():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
+    """
+    Submit abstract - supports both text content and PDF file upload
+    Accepts multipart/form-data with:
+    - title (required)
+    - field (required)
+    - country (required)
+    - year (required)
+    - institution (required)
+    - keywords (optional)
+    - content (optional - text abstract)
+    - file (optional - PDF file)
+    Note: Either 'content' or 'file' must be provided
+    """
 
-    # Get data
-    title = data.get("title")
-    content = data.get("content")
-    field = data.get("field")
-    country = data.get("country")
-    year = data.get("year")
-    institution = data.get("institution")
-    keywords = data.get("keywords")
+    # Get form data
+    title = request.form.get("title")
+    field = request.form.get("field")
+    country = request.form.get("country")
+    year = request.form.get("year")
+    institution = request.form.get("institution")
+    keywords = request.form.get("keywords")
+    content = request.form.get("content")  # Text abstract
 
-    # Validate required fields exist
-    if not all([title, content, field, institution, country, year]):
+    # Validate required fields
+    if not all([title, field, institution, country, year]):
         return jsonify({"error": "Missing required fields"}), 400
 
-    # Validate field value (only after confirming it exists)
-    allowed_fields = ['Public Health', 'AI', 'Technology', 'Agriculture', 'Mining Engineering']
-    if field.lower() not in [f.lower() for f in allowed_fields]:
+    # Validate field value
+    allowed_fields = [
+        "Public Health",
+        "AI",
+        "Technology",
+        "Agriculture",
+        "Mining Engineering",
+    ]
+    if field not in allowed_fields:
         return jsonify({"error": "Invalid field"}), 400
 
+    # Convert year to integer
+    try:
+        year = int(year)
+    except ValueError:
+        return jsonify({"error": "Invalid year format"}), 400
+
+    # Check if file is uploaded
+    file = request.files.get("file")
+    file_path = None
+    file_type = "text"
+
+    # Validate that either content or file is provided
+    if not content and not file:
+        return jsonify(
+            {"error": "Either text content or PDF file must be provided"}
+        ), 400
+
+    # Handle file upload if present
+    if file and file.filename:
+        # Validate file
+        if not allowed_file(file.filename):
+            return jsonify({"error": "Only PDF files are allowed"}), 400
+
+        # Check file size (Flask handles this, but we can add extra check)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)  # Reset file pointer
+
+        if file_size > MAX_FILE_SIZE:
+            return jsonify({"error": "File size exceeds 10MB limit"}), 400
+
+        if file_size == 0:
+            return jsonify({"error": "File is empty"}), 400
+
+        # Generate unique filename
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_filename = f"{current_user.id}_{timestamp}_{filename}"
+
+        # Create user-specific directory
+        user_upload_dir = os.path.join(UPLOAD_FOLDER, str(current_user.id))
+        os.makedirs(user_upload_dir, exist_ok=True)
+
+        # Save file
+        file_path = os.path.join(user_upload_dir, unique_filename)
+        try:
+            file.save(file_path)
+            file_type = "pdf"
+            # Store relative path for database
+            file_path = os.path.join(str(current_user.id), unique_filename)
+        except Exception as e:
+            return jsonify({"error": f"Failed to save file: {str(e)}"}), 500
+
+    # Create abstract record
     abstract = Abstracts(
-        title = title,
-        content = content,
-        field = field,
-        year = year,
-        country = country,
-        institution = institution,
-        author_id = current_user.id,
-        keywords = keywords
+        title=title,
+        content=content if file_type == "text" else None,
+        file_path=file_path if file_type == "pdf" else None,
+        file_type=file_type,
+        field=field,
+        year=year,
+        country=country,
+        institution=institution,
+        author_id=current_user.id,
+        keywords=keywords,
     )
-    
+
     try:
         db.session.add(abstract)
         db.session.commit()
-        
+
         # Send confirmation email to user
         send_abstract_confirmation_email(
             user_email=current_user.email,
             user_name=current_user.fullname,
             abstract_title=abstract.title,
-            abstract_id=abstract.id
+            abstract_id=abstract.id,
         )
-        
+
         # Send notification email to admin
         send_admin_notification_email(
             abstract_title=abstract.title,
             author_name=current_user.fullname,
-            abstract_id=abstract.id
+            abstract_id=abstract.id,
         )
-        
+
     except Exception as e:
         db.session.rollback()
+        # Clean up uploaded file if database insert fails
+        if file_path and file_type == "pdf":
+            full_path = os.path.join(UPLOAD_FOLDER, file_path)
+            if os.path.exists(full_path):
+                os.remove(full_path)
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({"message": "Abstract submitted successfully", "id": abstract.id}), 201
+    return jsonify(
+        {
+            "message": "Abstract submitted successfully",
+            "id": abstract.id,
+            "file_type": file_type,
+        }
+    ), 201
+
+
+@app.route("/api/abstracts/<int:id>/download", methods=["GET"])
+def download_abstract(id):
+    """Download abstract PDF file if available"""
+    abstract = Abstracts.query.get(id)
+
+    if not abstract:
+        return jsonify({"error": "Abstract not found"}), 404
+
+    # Only allow downloading published abstracts or own abstracts
+    if abstract.status != "published":
+        if not current_user.is_authenticated or (
+            current_user.id != abstract.author_id and current_user.role != "admin"
+        ):
+            return jsonify({"error": "Access denied"}), 403
+
+    if abstract.file_type != "pdf" or not abstract.file_path:
+        return jsonify({"error": "No PDF file available for this abstract"}), 404
+
+    file_path = os.path.join(UPLOAD_FOLDER, abstract.file_path)
+
+    if not os.path.exists(file_path):
+        return jsonify({"error": "File not found"}), 404
+
+    try:
+        return send_file(
+            file_path,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"abstract_{abstract.id}_{secure_filename(abstract.title)}.pdf",
+        )
+    except Exception as e:
+        return jsonify({"error": f"Failed to download file: {str(e)}"}), 500
 
 
 @app.route("/api/abstracts", methods=["GET"])
 def get_abstracts():
     abstracts = Abstracts.query.filter_by(status="published").all()
-    return jsonify([{
-    "id": abstract.id,
-    "title": abstract.title,
-    "content": abstract.content,
-    "field": abstract.field,
-    "institution": abstract.institution,
-    "yearOfResearch": abstract.year,
-    "keywords": abstract.keywords,
-    "status": abstract.status,
-    "authorId": abstract.author_id,
-    "dateSubmitted": abstract.date_submitted.isoformat()
-} for abstract in abstracts]), 200
+    return jsonify(
+        [
+            {
+                "id": abstract.id,
+                "title": abstract.title,
+                "content": abstract.content if abstract.file_type == "text" else None,
+                "fileType": abstract.file_type,
+                "hasFile": abstract.file_type == "pdf",
+                "field": abstract.field,
+                "institution": abstract.institution,
+                "country": abstract.country,
+                "yearOfResearch": abstract.year,
+                "keywords": abstract.keywords,
+                "status": abstract.status,
+                "authorId": abstract.author_id,
+                "dateSubmitted": abstract.date_submitted.isoformat(),
+            }
+            for abstract in abstracts
+        ]
+    ), 200
 
 
-#TODO: test
 @app.route("/api/abstracts/search", methods=["GET"])
 def search_abstracts():
     """Search abstracts with filters"""
-    # Get query parameters
-    field = request.args.get('field')
-    country = request.args.get('country')
-    institution = request.args.get('institution')
-    year = request.args.get('year', type=int)
-    keyword = request.args.get('keyword')
-    
-    # Build query
-    query = Abstracts.query.filter_by(status='published')
-    
+    field = request.args.get("field")
+    country = request.args.get("country")
+    institution = request.args.get("institution")
+    year = request.args.get("year", type=int)
+    keyword = request.args.get("keyword")
+
+    query = Abstracts.query.filter_by(status="published")
+
     if field:
         query = query.filter_by(field=field)
     if country:
         query = query.filter_by(country=country)
     if institution:
-        query = query.filter(Abstracts.institution.ilike(f'%{institution}%'))
+        query = query.filter(Abstracts.institution.ilike(f"%{institution}%"))
     if year:
         query = query.filter_by(year=year)
     if keyword:
         query = query.filter(
             db.or_(
-                Abstracts.title.ilike(f'%{keyword}%'),
-                Abstracts.content.ilike(f'%{keyword}%'),
-                Abstracts.keywords.ilike(f'%{keyword}%')
+                Abstracts.title.ilike(f"%{keyword}%"),
+                Abstracts.content.ilike(f"%{keyword}%"),
+                Abstracts.keywords.ilike(f"%{keyword}%"),
             )
         )
-    
+
     abstracts = query.all()
-    
-    # Return empty list if no results (not an error)
-    return jsonify([{
-        "id": abstract.id,
-        "title": abstract.title,
-        "content": abstract.content,
-        "field": abstract.field,
-        "institution": abstract.institution,
-        "country": abstract.country,
-        "yearOfResearch": abstract.year,
-        "keywords": abstract.keywords,
-        "status": abstract.status,
-        "authorId": abstract.author_id,
-        "dateSubmitted": abstract.date_submitted.isoformat()
-    } for abstract in abstracts]), 200
+
+    return jsonify(
+        [
+            {
+                "id": abstract.id,
+                "title": abstract.title,
+                "content": abstract.content if abstract.file_type == "text" else None,
+                "fileType": abstract.file_type,
+                "hasFile": abstract.file_type == "pdf",
+                "field": abstract.field,
+                "institution": abstract.institution,
+                "country": abstract.country,
+                "yearOfResearch": abstract.year,
+                "keywords": abstract.keywords,
+                "status": abstract.status,
+                "authorId": abstract.author_id,
+                "dateSubmitted": abstract.date_submitted.isoformat(),
+            }
+            for abstract in abstracts
+        ]
+    ), 200
 
 
 @app.route("/api/abstracts/<int:id>", methods=["GET"])
 def get_specific_abstract(id):
     abstract = Abstracts.query.get(id)
-    
+
     if abstract is None:
         return jsonify({"error": "Abstract not found"}), 404
-    
-    return jsonify({
-        "id": abstract.id,
-        "title": abstract.title,
-        "content": abstract.content,
-        "field": abstract.field,
-        "institution": abstract.institution,
-        "yearOfResearch": abstract.year,
-        "keywords": abstract.keywords,
-        "status": abstract.status,
-        "authorId": abstract.author_id,
-        "dateSubmitted": abstract.date_submitted.isoformat()
-    }), 200
+
+    return jsonify(
+        {
+            "id": abstract.id,
+            "title": abstract.title,
+            "content": abstract.content if abstract.file_type == "text" else None,
+            "fileType": abstract.file_type,
+            "hasFile": abstract.file_type == "pdf",
+            "field": abstract.field,
+            "institution": abstract.institution,
+            "country": abstract.country,
+            "yearOfResearch": abstract.year,
+            "keywords": abstract.keywords,
+            "status": abstract.status,
+            "authorId": abstract.author_id,
+            "dateSubmitted": abstract.date_submitted.isoformat(),
+        }
+    ), 200
+
+
+@app.route("/api/user/dashboard", methods=["GET"])
+@student_required
+def user_dashboard():
+    """Get student's dashboard info including their abstracts and payment status"""
+
+    if current_user.role.lower() != "student":
+        return jsonify({"error": "Student access required"}), 403
+
+    user_abstracts = []
+    for abstract in current_user.abstracts:
+        payment = Payments.query.filter_by(abstract_id=abstract.id).first()
+        invoice = Invoices.query.filter_by(abstract_id=abstract.id).first()
+
+        abstract_data = {
+            "id": abstract.id,
+            "title": abstract.title,
+            "content": abstract.content if abstract.file_type == "text" else None,
+            "fileType": abstract.file_type,
+            "hasFile": abstract.file_type == "pdf",
+            "field": abstract.field,
+            "institution": abstract.institution,
+            "country": abstract.country,
+            "year": abstract.year,
+            "keywords": abstract.keywords,
+            "status": abstract.status,
+            "dateSubmitted": abstract.date_submitted.isoformat(),
+            "paymentStatus": payment.status if payment else "not_initiated",
+            "paymentAmount": payment.amount if payment else None,
+            "invoicePaid": invoice.paid if invoice else False,
+            "invoiceUrl": invoice.invoice_url if invoice else None,
+        }
+        user_abstracts.append(abstract_data)
+
+    notifications = (
+        Notifications.query.filter_by(user_id=current_user.id)
+        .order_by(Notifications.id.desc())
+        .all()
+    )
+    notification_data = [
+        {
+            "id": notification.id,
+            "message": notification.message,
+            "read": notification.read,
+        }
+        for notification in notifications
+    ]
+
+    dashboard_data = {
+        "user": {
+            "id": current_user.id,
+            "fullname": current_user.fullname,
+            "email": current_user.email,
+            "country": current_user.country,
+            "role": current_user.role,
+        },
+        "abstracts": user_abstracts,
+        "notifications": notification_data,
+        "stats": {
+            "totalAbstracts": len(user_abstracts),
+            "pendingAbstracts": len(
+                [a for a in user_abstracts if a["status"] == "pending"]
+            ),
+            "approvedAbstracts": len(
+                [a for a in user_abstracts if a["status"] == "approved"]
+            ),
+            "rejectedAbstracts": len(
+                [a for a in user_abstracts if a["status"] == "rejected"]
+            ),
+            "unreadNotifications": len([n for n in notifications if not n.read]),
+        },
+    }
+
+    return jsonify(dashboard_data), 200
 
 
 @app.route("/api/admin", methods=["GET"])
@@ -188,36 +424,42 @@ def admin_dashboard():
         "rejectedAbstracts": len([a for a in abstracts if a.status == "rejected"]),
         "totalUsers": Users.query.count(),
         "totalPayments": Payments.query.filter_by(status="confirmed").count(),
-        "pendingPayments": Payments.query.filter_by(status="pending").count()
+        "pendingPayments": Payments.query.filter_by(status="pending").count(),
     }
 
     # Get recent abstracts for review
-    recent_abstracts = Abstracts.query.filter_by(status="pending").order_by(Abstracts.date_submitted.desc()).limit(10).all()
-    recent_abstracts_data = [{
-        "id": abstract.id,
-        "title": abstract.title,
-        "field": abstract.field,
-        "institution": abstract.institution,
-        "author": abstract.author.fullname,
-        "dateSubmitted": abstract.date_submitted.isoformat()
-    } for abstract in recent_abstracts]
+    recent_abstracts = (
+        Abstracts.query.filter_by(status="pending")
+        .order_by(Abstracts.date_submitted.desc())
+        .limit(10)
+        .all()
+    )
+    recent_abstracts_data = [
+        {
+            "id": abstract.id,
+            "title": abstract.title,
+            "field": abstract.field,
+            "institution": abstract.institution,
+            "author": abstract.author.fullname,
+            "dateSubmitted": abstract.date_submitted.isoformat(),
+        }
+        for abstract in recent_abstracts
+    ]
 
-    return jsonify({
-        "stats": stats,
-        "recentAbstracts": recent_abstracts_data
-    }), 200
+    return jsonify({"stats": stats, "recentAbstracts": recent_abstracts_data}), 200
 
 
 @app.route("/api/payments/initiate", methods=["POST"])
 @student_required
 def initiate_payment():
-    
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
     abstract_id = data.get("abstract_id")
-    amount = current_app.config.get("ABSTRACT_PUBLICATION_FEE", 1.99)  # Default to 1.99 USD
+    amount = current_app.config.get(
+        "ABSTRACT_PUBLICATION_FEE", 1.99
+    )  # Default to 1.99 USD
     currency = data.get("currency", "USD")
     method = data.get("method", "PayChangu")  # Default to PayChangu
     if not abstract_id:
@@ -238,35 +480,35 @@ def initiate_payment():
         tx_ref=f"abstract_{abstract_id}_{int(datetime.now().timestamp())}",
         customization={
             "title": "African Research Hub Abstract Payment",
-            "description": f"Payment for publishing abstract ID {abstract_id}"
-        }
+            "description": f"Payment for publishing abstract ID {abstract_id}",
+        },
     )
 
     response = paychangu_client.initiate_transaction(paychangu_payment)
 
-    if response.status != 'success':
+    if response.status != "success":
         return jsonify({"error": "Failed to initiate payment"}), 500
 
-    payment_link = response['data']['checkout_url']
-    transaction_id =  response['data']['tx_ref']
+    payment_link = response["data"]["checkout_url"]
+    transaction_id = response["data"]["tx_ref"]
 
     # Create Payment
     payment = Payments(
-        abstract_id = abstract_id,
-        amount = amount,
-        currency = currency,
-        method = method,
-        transaction_id = transaction_id,
-        payment_link = payment_link
+        abstract_id=abstract_id,
+        amount=amount,
+        currency=currency,
+        method=method,
+        transaction_id=transaction_id,
+        payment_link=payment_link,
     )
-    
+
     # Generate payment link from PayChangu
     invoice_url = payment.payment_link
 
     # Create Invoice
     invoice = Invoices(
-        abstract_id = abstract_id,
-        invoice_url = invoice_url,
+        abstract_id=abstract_id,
+        invoice_url=invoice_url,
     )
 
     try:
@@ -276,52 +518,44 @@ def initiate_payment():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({
-        "message": "Payment initiated",
-        "invoiceId": invoice.id,
-        "invoiceUrl": invoice.invoice_url,
-        "paymentId": payment.id,
-        "amount": payment.amount,
-        "currency": payment.currency,
-        "status": payment.status,
-        "method": payment.method,
-# def reset_password():
-#     """ API endpoint for password reset """
-
-#     try:
-#         data = request.get_json()
-#         token = request.args.get('token')
-#         new_password = data.get('password')
-#         confirm_password = data.get('confirm_password')
-        
-#         if not all([token, new_password, confirm_password]):
-#             return jsonify({"error": "All fields are required"}), 400
-        
-#         if new_password != confirm_password:
-#             return jsonify({"error": "Passwords do not match"}), 400
-        
-#         result = verify_reset_token(token)
-#         if not result:
-#             return jsonify({"error": "Invalid or expired reset token"}), 400
-        
-#         user, reset_token = result
-        
-#         user.password = generate_password_hash(new_password)
-#         invalidate_token(reset_token)
-#         db.session.commit()
-        
-#         return jsonify({"message": "Password has been reset successfully"}), 200
-        
-#     except Exception as e:
-#         db.session.rollback()
-#         return jsonify({
-#             "error": "An error occurred. Please try again.",
-#             "details": str(e)
-#         }), 500
-
-
-        "payment_link": payment.payment_link,
-    }), 201
+    return jsonify(
+        {
+            "message": "Payment initiated",
+            "invoiceId": invoice.id,
+            "invoiceUrl": invoice.invoice_url,
+            "paymentId": payment.id,
+            "amount": payment.amount,
+            "currency": payment.currency,
+            "status": payment.status,
+            "method": payment.method,
+            # def reset_password():
+            #     """ API endpoint for password reset """
+            #     try:
+            #         data = request.get_json()
+            #         token = request.args.get('token')
+            #         new_password = data.get('password')
+            #         confirm_password = data.get('confirm_password')
+            #         if not all([token, new_password, confirm_password]):
+            #             return jsonify({"error": "All fields are required"}), 400
+            #         if new_password != confirm_password:
+            #             return jsonify({"error": "Passwords do not match"}), 400
+            #         result = verify_reset_token(token)
+            #         if not result:
+            #             return jsonify({"error": "Invalid or expired reset token"}), 400
+            #         user, reset_token = result
+            #         user.password = generate_password_hash(new_password)
+            #         invalidate_token(reset_token)
+            #         db.session.commit()
+            #         return jsonify({"message": "Password has been reset successfully"}), 200
+            #     except Exception as e:
+            #         db.session.rollback()
+            #         return jsonify({
+            #             "error": "An error occurred. Please try again.",
+            #             "details": str(e)
+            #         }), 500
+            "payment_link": payment.payment_link,
+        }
+    ), 201
 
 
 @app.route("/api/payments/confirm", methods=["POST"])
@@ -335,29 +569,43 @@ def confirm_payment():
     if not transaction_id:
         return jsonify({"error": "Missing transaction_id"}), 400
 
+    # Check if payment exists
+    payment = Payments.query.filter_by(transaction_id=transaction_id).first()
+    if not payment:
+        return jsonify({"error": "Payment not found"}), 404
+
     # Check abstract ownership
     abstract = Abstracts.query.get(payment.abstract_id)
     if abstract.author_id != current_user.id:
-        return jsonify({"error": "Unauthorized: You can only confirm your own payments"}), 403
-    
+        return jsonify(
+            {"error": "Unauthorized: You can only confirm your own payments"}
+        ), 403
+
+    # Check if payment is already confirmed to avoid hitting paychangu API rate-limits
+    if payment.status == "confirmed":
+        return jsonify({"error": "Payment already confirmed"}), 400
+
     # Check payment status via PayChangu
     try:
         payment_check = paychangu_client.verify_transaction(transaction_id)
     except Exception as e:
         return jsonify({"error": "Payment verification failed", "details": str(e)}), 500
-    
-    if (payment_check.status != 'success') and (current_user.email != payment_check.data.customer.email):
-        return jsonify({"error": "Payment not successful or still pending or email mismatch"}), 400
+
+    if (payment_check.status != "success") and (
+        current_user.email != payment_check.data.customer.email
+    ):
+        return jsonify(
+            {"error": "Payment not successful or still pending or email mismatch"}
+        ), 400
 
     user = Users.query.get(abstract.author_id)
 
     # Update payment status, date, and invoice paid status
-    payment = Payments.query.filter_by(transaction_id=transaction_id).first()
     payment.status = "confirmed"
     payment.payment_date = datetime.now(timezone.utc)
 
     # Publish abstract after payment
-    abstract.status = 'published'
+    abstract.status = "published"
 
     abstract_id = payment.abstract_id
     invoice = Invoices.query.filter_by(abstract_id=abstract_id).first()
@@ -369,26 +617,28 @@ def confirm_payment():
 
     try:
         db.session.commit()
-        
+
         # Send payment confirmation email
         send_payment_confirmation_email(
             user_email=user.email,
             user_name=user.fullname,
             amount=payment.amount,
             currency=payment.currency,
-            invoice_id=invoice.id
+            invoice_id=invoice.id,
         )
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({
-        "message": "Payment confirmed",
-        "payment_id": payment.id,
-        "status": payment.status,
-        "payment_date": payment.payment_date.isoformat()
-    }), 200
+    return jsonify(
+        {
+            "message": "Payment confirmed",
+            "payment_id": payment.id,
+            "status": payment.status,
+            "payment_date": payment.payment_date.isoformat(),
+        }
+    ), 200
 
 
 @app.route("/api/login", methods=["POST"])
@@ -418,19 +668,15 @@ def login():
 
     if user.role.lower() == "admin":
         login_user(user)
-        return jsonify({
-            "message": "Login successful",
-            "role": "admin",
-            "redirect": "/admin"
-        }), 200
+        return jsonify(
+            {"message": "Login successful", "role": "admin", "redirect": "/admin"}
+        ), 200
 
     elif user.role.lower() == "student":
         login_user(user)
-        return jsonify({
-            "message": "Login successful", 
-            "role": "student",
-            "redirect": "/dashboard"
-        }), 200
+        return jsonify(
+            {"message": "Login successful", "role": "student", "redirect": "/dashboard"}
+        ), 200
 
     return jsonify({"message": "You have been successfully logged in"}), 201
 
@@ -439,16 +685,20 @@ def login():
 def register():
     if current_user.is_authenticated:
         if current_user.role.lower() == "admin":
-            return jsonify({
+            return jsonify(
+                {
+                    "message": "Logout to create a new account",
+                    "role": "admin",
+                    "redirect": "/admin",
+                }
+            ), 200
+        return jsonify(
+            {
                 "message": "Logout to create a new account",
-                "role": "admin",
-                "redirect": "/admin"
-            }), 200
-        return jsonify({
-            "message": "Logout to create a new account",
-            "role": "student",
-            "redirect": "/dashboard"
-        }), 200
+                "role": "student",
+                "redirect": "/dashboard",
+            }
+        ), 200
 
     data = request.get_json()
     if not data:
@@ -467,10 +717,10 @@ def register():
         return jsonify({"error": "Email already exists"}), 400
 
     user = Users(
-        fullname = fullname,
-        email = email,
-        country = country,
-        role = role
+        fullname=fullname.strip(),
+        email=email.strip(),
+        country=country.strip(),
+        role=role.strip(),
     )
     user.set_password(password)
     try:
@@ -480,10 +730,12 @@ def register():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({"message": f"Account created successfully", "role": f"{user.role}"}), 201
+    return jsonify(
+        {"message": "Account created successfully", "role": f"{user.role}"}
+    ), 201
 
 
-@app.route('/api/logout/', methods=['POST'])
+@app.route("/api/logout/", methods=["POST"])
 @login_required
 def logout():
     logout_user()
@@ -501,7 +753,9 @@ def contact():
     message = data.get("message")
 
     if not all([name, email, message]):
-        return jsonify({"error": "Missing required fields: name, email, and message"}), 400
+        return jsonify(
+            {"error": "Missing required fields: name, email, and message"}
+        ), 400
 
     # Basic email validation
     if not is_valid_email(email):
@@ -519,100 +773,36 @@ def contact():
         return jsonify({"error": "Name must be at least 2 characters long"}), 400
 
     contact = Contact(
-        name = name.strip(),
-        email = email.strip().lower(),
-        message = message.strip()
+        name=name.strip(), email=email.strip().lower(), message=message.strip()
     )
 
     try:
         db.session.add(contact)
         db.session.commit()
-        
+
         # Send confirmation email to the user
         send_contact_confirmation_email(
-            user_email=contact.email,
-            user_name=contact.name
+            user_email=contact.email, user_name=contact.name
         )
-        
+
         # Send notification email to admin
         send_contact_admin_notification_email(
             contact_name=contact.name,
             contact_email=contact.email,
             contact_message=contact.message,
-            contact_id=contact.id
+            contact_id=contact.id,
         )
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Failed to process contact form: {str(e)}"}), 500
 
-    return jsonify({
-        "message": "Thank you for your message! We'll get back to you within 24-48 hours.", 
-        "id": contact.id
-    }), 201
-
-
-@app.route("/api/user/dashboard", methods=["GET"])
-@student_required
-def user_dashboard():
-    """Get student's dashboard info including their abstracts and payment status"""
-    
-    if current_user.role.lower() != 'student':
-        return jsonify({"error": "Student access required"}), 403
-
-    # Get user's abstracts with related payment/invoice info
-    user_abstracts = []
-    for abstract in current_user.abstracts:
-        # Get payment info for this abstract
-        payment = Payments.query.filter_by(abstract_id=abstract.id).first()
-        invoice = Invoices.query.filter_by(abstract_id=abstract.id).first()
-
-        abstract_data = {
-            "id": abstract.id,
-            "title": abstract.title,
-            "content": abstract.content,
-            "field": abstract.field,
-            "institution": abstract.institution,
-            "country": abstract.country,
-            "year": abstract.year,
-            "keywords": abstract.keywords,
-            "status": abstract.status,
-            "dateSubmitted": abstract.date_submitted.isoformat(),
-            "paymentStatus": payment.status if payment else "not_initiated",
-            "paymentAmount": payment.amount if payment else None,
-            "invoicePaid": invoice.paid if invoice else False,
-            "invoiceUrl": invoice.invoice_url if invoice else None
+    return jsonify(
+        {
+            "message": "Thank you for your message! We'll get back to you within 24-48 hours.",
+            "id": contact.id,
         }
-        user_abstracts.append(abstract_data)
-
-    # Get user's notifications
-    notifications = Notifications.query.filter_by(user_id=current_user.id).order_by(Notifications.id.desc()).all()
-    notification_data = [{
-        "id": notification.id,
-        "message": notification.message,
-        "read": notification.read
-    } for notification in notifications]
-
-    dashboard_data = {
-        "user": {
-            "id": current_user.id,
-            "fullname": current_user.fullname,
-            "email": current_user.email,
-            "country": current_user.country,
-            "role": current_user.role
-        },
-        "abstracts": user_abstracts,
-        "notifications": notification_data,
-        "stats": {
-            "totalAbstracts": len(user_abstracts),
-            "pendingAbstracts": len([a for a in user_abstracts if a["status"] == "pending"]),
-            "approvedAbstracts": len([a for a in user_abstracts if a["status"] == "approved"]),
-            "rejectedAbstracts": len([a for a in user_abstracts if a["status"] == "rejected"]),
-            "unreadNotifications": len([n for n in notifications if not n.read])
-        }
-    }
-
-    return jsonify(dashboard_data), 200
+    ), 201
 
 
 @app.route("/api/admin/review/<int:abstract_id>", methods=["POST"])
@@ -637,10 +827,10 @@ def review_abstract(abstract_id):
 
     if abstract.status == "approved" or abstract.status == "publishedd":
         return jsonify({"error": "Abstract already approved"}), 400
-    
+
     if abstract is None:
         return jsonify({"error": "Abstract not found"}), 404
-    
+
     user = Users.query.get(abstract.author_id)
 
     # Update abstract status
@@ -655,40 +845,39 @@ def review_abstract(abstract_id):
         # Add feedback if provided
         if feedback_comment:
             feedback = Feedback(
-                abstract_id = abstract_id,
-                admin_id = admin_id,
-                comment = feedback_comment
+                abstract_id=abstract_id, admin_id=admin_id, comment=feedback_comment
             )
             db.session.add(feedback)
 
         # Add notification for the author
         notification = Notifications(
-            user_id = abstract.author_id,
-            message = notification_message
+            user_id=abstract.author_id, message=notification_message
         )
 
         db.session.add(notification)
         db.session.commit()
-        
+
         # Send email notification to user
         send_abstract_review_email(
             user_email=user.email,
             user_name=user.fullname,
             abstract_title=abstract.title,
             status=abstract.status,
-            feedback=feedback_comment if feedback_comment else None
+            feedback=feedback_comment if feedback_comment else None,
         )
 
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({
-        "message": f"Abstract {action}d",
-        "abstractId": abstract.id,
-        "status": abstract.status,
-        "feedbackProvided": bool(feedback_comment)
-    }), 200
+    return jsonify(
+        {
+            "message": f"Abstract {action}d",
+            "abstractId": abstract.id,
+            "status": abstract.status,
+            "feedbackProvided": bool(feedback_comment),
+        }
+    ), 200
 
 
 @app.route("/api/resubmit/<int:abstract_id>", methods=["POST"])
@@ -704,7 +893,9 @@ def resubmit_abstract(abstract_id):
 
     # Verify the user owns this abstract
     if abstract.author_id != current_user.id:
-        return jsonify({"error": "Unauthorized: You can only resubmit your own abstracts"}), 403
+        return jsonify(
+            {"error": "Unauthorized: You can only resubmit your own abstracts"}
+        ), 403
 
     # Only allow resubmission of rejected abstracts
     if abstract.status != "rejected":
@@ -733,8 +924,8 @@ def resubmit_abstract(abstract_id):
     try:
         # Add notification for successful resubmission
         notification = Notifications(
-            user_id = current_user.id,
-            message = f"Your abstract '{abstract.title}' has been resubmitted successfully!"
+            user_id=current_user.id,
+            message=f"Your abstract '{abstract.title}' has been resubmitted successfully!",
         )
         db.session.add(notification)
         db.session.commit()
@@ -743,165 +934,165 @@ def resubmit_abstract(abstract_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({
-        "message": "Abstract resubmitted successfully",
-        "abstractId": abstract.id,
-        "status": abstract.status,
-        "dateSubmitted": abstract.date_submitted.isoformat()
-    }), 200
+    return jsonify(
+        {
+            "message": "Abstract resubmitted successfully",
+            "abstractId": abstract.id,
+            "status": abstract.status,
+            "dateSubmitted": abstract.date_submitted.isoformat(),
+        }
+    ), 200
 
 
-@app.route('/api/reviews', methods=['POST'])
+@app.route("/api/reviews", methods=["POST"])
 def submit_review():
     """Submit a new review"""
     data = request.get_json()
-    
+
     if not data:
         return jsonify({"error": "No data provided"}), 400
-    
+
     rating = data.get("rating")
     comment = data.get("comment", "").strip()
-    
+
     if not rating:
         return jsonify({"error": "Rating is required"}), 400
-    
+
     try:
         rating = int(rating)
         if rating < 1 or rating > 5:
             return jsonify({"error": "Rating must be between 1 and 5"}), 400
     except (ValueError, TypeError):
         return jsonify({"error": "Rating must be a valid number"}), 400
-    
+
     # Validate comment length
     if comment and len(comment) > 1000:
         return jsonify({"error": "Comment must be less than 1000 characters"}), 400
-    
+
     # Create review
     review = Reviews(
         rating=rating,
         comment=comment if comment else None,
-        user_id=current_user.id if current_user.is_authenticated else None
+        user_id=current_user.id if current_user.is_authenticated else None,
     )
-    
+
     try:
         db.session.add(review)
         db.session.commit()
-        
-        return jsonify({
-            "message": "Thank you for your review",
-            "review": review.to_dict()
-        }), 201
-        
+
+        return jsonify(
+            {"message": "Thank you for your review", "review": review.to_dict()}
+        ), 201
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": "Failed to save review"}), 500
 
 
-@app.route('/api/reviews', methods=['GET'])
+@app.route("/api/reviews", methods=["GET"])
 def get_reviews():
     """Get all reviews with pagination and filtering"""
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    rating_filter = request.args.get('rating', type=int)
-    
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+    rating_filter = request.args.get("rating", type=int)
+
     # Limit per_page to prevent abuse
     per_page = min(per_page, 50)
-    
+
     query = Reviews.query
-    
+
     # Filter by rating if specified
     if rating_filter and 1 <= rating_filter <= 5:
         query = query.filter_by(rating=rating_filter)
-    
+
     # Order by most recent first
     query = query.order_by(Reviews.created_at.desc())
-    
+
     # Paginate
-    reviews = query.paginate(
-        page=page, 
-        per_page=per_page, 
-        error_out=False
-    )
-    
+    reviews = query.paginate(page=page, per_page=per_page, error_out=False)
+
     # Calculate statistics
     total_reviews = Reviews.query.count()
     avg_rating = db.session.query(db.func.avg(Reviews.rating)).scalar()
     avg_rating = round(avg_rating, 1) if avg_rating else 0
-    
+
     # Rating distribution
     rating_counts = {}
     for i in range(1, 6):
         rating_counts[i] = Reviews.query.filter_by(rating=i).count()
-    
-    return jsonify({
-        "reviews": [review.to_dict() for review in reviews.items],
-        "pagination": {
-            "page": page,
-            "pages": reviews.pages,
-            "per_page": per_page,
-            "total": reviews.total,
-            "has_next": reviews.has_next,
-            "has_prev": reviews.has_prev
-        },
-        "statistics": {
-            "total_reviews": total_reviews,
-            "average_rating": avg_rating,
-            "rating_distribution": rating_counts
+
+    return jsonify(
+        {
+            "reviews": [review.to_dict() for review in reviews.items],
+            "pagination": {
+                "page": page,
+                "pages": reviews.pages,
+                "per_page": per_page,
+                "total": reviews.total,
+                "has_next": reviews.has_next,
+                "has_prev": reviews.has_prev,
+            },
+            "statistics": {
+                "total_reviews": total_reviews,
+                "average_rating": avg_rating,
+                "rating_distribution": rating_counts,
+            },
         }
-    }), 200
+    ), 200
 
 
-@app.route('/api/reviews/stats', methods=['GET'])
+@app.route("/api/reviews/stats", methods=["GET"])
 def get_review_stats():
     """Get review statistics summary"""
-    
+
     total_reviews = Reviews.query.count()
-    
+
     if total_reviews == 0:
-        return jsonify({
-            "total_reviews": 0,
-            "average_rating": 0,
-            "rating_distribution": {str(i): 0 for i in range(1, 6)}
-        }), 200
-    
+        return jsonify(
+            {
+                "total_reviews": 0,
+                "average_rating": 0,
+                "rating_distribution": {str(i): 0 for i in range(1, 6)},
+            }
+        ), 200
+
     avg_rating = db.session.query(db.func.avg(Reviews.rating)).scalar()
     avg_rating = round(avg_rating, 1) if avg_rating else 0
-    
+
     # Rating distribution
     rating_counts = {}
     for i in range(1, 6):
         count = Reviews.query.filter_by(rating=i).count()
         rating_counts[str(i)] = count
-    
-    return jsonify({
-        "total_reviews": total_reviews,
-        "average_rating": avg_rating,
-        "rating_distribution": rating_counts
-    }), 200
+
+    return jsonify(
+        {
+            "total_reviews": total_reviews,
+            "average_rating": avg_rating,
+            "rating_distribution": rating_counts,
+        }
+    ), 200
 
 
-@app.route('/api/admin/reviews', methods=['GET'])
+@app.route("/api/admin/reviews", methods=["GET"])
 @admin_required
 def admin_get_reviews():
     """Admin endpoint to get all reviews with user details"""
 
-    if not current_user.is_authenticated or current_user.role != 'admin':
+    if not current_user.is_authenticated or current_user.role != "admin":
         return jsonify({"error": "Admin access required"}), 403
-    
+
     reviews = Reviews.query.order_by(Reviews.created_at.desc()).all()
-    
+
     reviews_data = []
     for review in reviews:
         review_data = review.to_dict()
         if review.user:
-            review_data['user_email'] = review.user.email
-            review_data['user_country'] = review.user.country
+            review_data["user_email"] = review.user.email
+            review_data["user_country"] = review.user.country
         reviews_data.append(review_data)
-    
-    return jsonify({
-        "reviews": reviews_data,
-        "total": len(reviews_data)
-    }), 200
+
+    return jsonify({"reviews": reviews_data, "total": len(reviews_data)}), 200
 
 
 # @app.route('/api/password/request_reset', methods=['POST'])
@@ -910,26 +1101,26 @@ def admin_get_reviews():
 #     try:
 #         data = request.get_json()
 #         email = data.get('email')
-        
+
 #         if not email:
 #             return jsonify({"error": "Email is required"}), 400
-        
+
 #         user = Users.query.filter_by(email=email).first()
-        
+
 #         if not user:
 #             return jsonify({
 #                 "message": "If an account exists with this email, a password reset link has been sent. Check your spam if not received"
 #             }), 200
-        
+
 #         token = generate_reset_token(user)
 #         reset_url = f"{app.config['FRONTEND_URL']}/reset-password?token={token}"
-        
+
 #         send_password_reset_email(user, reset_url)
-        
+
 #         return jsonify({
 #             "message": "If an account exists with this email, a password reset link has been sent."
 #         }), 200
-        
+
 #     except Exception as e:
 #         return jsonify({
 #             "error": "An error occurred. Please try again later.",
@@ -946,29 +1137,28 @@ def admin_get_reviews():
 #         token = request.args.get('token')
 #         new_password = data.get('password')
 #         confirm_password = data.get('confirm_password')
-        
+
 #         if not all([token, new_password, confirm_password]):
 #             return jsonify({"error": "All fields are required"}), 400
-        
+
 #         if new_password != confirm_password:
 #             return jsonify({"error": "Passwords do not match"}), 400
-        
+
 #         result = verify_reset_token(token)
 #         if not result:
 #             return jsonify({"error": "Invalid or expired reset token"}), 400
-        
+
 #         user, reset_token = result
-        
+
 #         user.password = generate_password_hash(new_password)
 #         invalidate_token(reset_token)
 #         db.session.commit()
-        
+
 #         return jsonify({"message": "Password has been reset successfully"}), 200
-        
+
 #     except Exception as e:
 #         db.session.rollback()
 #         return jsonify({
 #             "error": "An error occurred. Please try again.",
 #             "details": str(e)
 #         }), 500
-
