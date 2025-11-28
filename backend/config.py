@@ -56,6 +56,8 @@ class Config(object):
 
     # PayChangu Configurations
     PAYCHANGU_SECRET = os.getenv("PAYCHANGU_SECRET")
+    PAYCHANGU_CALLBACK_URL = os.getenv('PAYCHANGU_CALLBACK_URL')
+    PAYCHANGU_RETURN_URL = os.getenv('PAYCHANGU_RETURN_URL')
 
     # Email Configuration for cPanel
     MAIL_SERVER = os.environ.get("MAIL_SERVER")
