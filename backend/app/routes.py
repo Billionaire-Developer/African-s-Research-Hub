@@ -528,31 +528,6 @@ def initiate_payment():
             "currency": payment.currency,
             "status": payment.status,
             "method": payment.method,
-            # def reset_password():
-            #     """ API endpoint for password reset """
-            #     try:
-            #         data = request.get_json()
-            #         token = request.args.get('token')
-            #         new_password = data.get('password')
-            #         confirm_password = data.get('confirm_password')
-            #         if not all([token, new_password, confirm_password]):
-            #             return jsonify({"error": "All fields are required"}), 400
-            #         if new_password != confirm_password:
-            #             return jsonify({"error": "Passwords do not match"}), 400
-            #         result = verify_reset_token(token)
-            #         if not result:
-            #             return jsonify({"error": "Invalid or expired reset token"}), 400
-            #         user, reset_token = result
-            #         user.password = generate_password_hash(new_password)
-            #         invalidate_token(reset_token)
-            #         db.session.commit()
-            #         return jsonify({"message": "Password has been reset successfully"}), 200
-            #     except Exception as e:
-            #         db.session.rollback()
-            #         return jsonify({
-            #             "error": "An error occurred. Please try again.",
-            #             "details": str(e)
-            #         }), 500
             "payment_link": payment.payment_link,
         }
     ), 201
@@ -1095,70 +1070,70 @@ def admin_get_reviews():
     return jsonify({"reviews": reviews_data, "total": len(reviews_data)}), 200
 
 
-# @app.route('/api/password/request_reset', methods=['POST'])
-# def request_password_reset():
-#     """Request password reset - sends email with reset link"""
-#     try:
-#         data = request.get_json()
-#         email = data.get('email')
+@app.route('/api/password/request_reset', methods=['POST'])
+def request_password_reset():
+    """Request password reset - sends email with reset link"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
 
-#         if not email:
-#             return jsonify({"error": "Email is required"}), 400
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
 
-#         user = Users.query.filter_by(email=email).first()
+        user = Users.query.filter_by(email=email).first()
 
-#         if not user:
-#             return jsonify({
-#                 "message": "If an account exists with this email, a password reset link has been sent. Check your spam if not received"
-#             }), 200
+        if not user:
+            return jsonify({
+                "message": "If an account exists with this email, a password reset link has been sent. Check your spam if not received"
+            }), 200
 
-#         token = generate_reset_token(user)
-#         reset_url = f"{app.config['FRONTEND_URL']}/reset-password?token={token}"
+        token = generate_reset_token(user)
+        reset_url = f"{app.config['FRONTEND_URL']}/reset-password?token={token}"
 
-#         send_password_reset_email(user, reset_url)
+        send_password_reset_email(user, reset_url)
 
-#         return jsonify({
-#             "message": "If an account exists with this email, a password reset link has been sent."
-#         }), 200
+        return jsonify({
+            "message": "If an account exists with this email, a password reset link has been sent."
+        }), 200
 
-#     except Exception as e:
-#         return jsonify({
-#             "error": "An error occurred. Please try again later.",
-#             "details": str(e)
-#         }), 500
+    except Exception as e:
+        return jsonify({
+            "error": "An error occurred. Please try again later.",
+            "details": str(e)
+        }), 500
 
 
-# @app.route('/api/password/reset', methods=['POST'])
-# def reset_password():
-#     """ API endpoint for password reset """
+@app.route('/api/password/reset', methods=['POST'])
+def reset_password():
+    """ API endpoint for password reset """
 
-#     try:
-#         data = request.get_json()
-#         token = request.args.get('token')
-#         new_password = data.get('password')
-#         confirm_password = data.get('confirm_password')
+    try:
+        data = request.get_json()
+        token = request.args.get('token')
+        new_password = data.get('password')
+        confirm_password = data.get('confirm_password')
 
-#         if not all([token, new_password, confirm_password]):
-#             return jsonify({"error": "All fields are required"}), 400
+        if not all([token, new_password, confirm_password]):
+            return jsonify({"error": "All fields are required"}), 400
 
-#         if new_password != confirm_password:
-#             return jsonify({"error": "Passwords do not match"}), 400
+        if new_password != confirm_password:
+            return jsonify({"error": "Passwords do not match"}), 400
 
-#         result = verify_reset_token(token)
-#         if not result:
-#             return jsonify({"error": "Invalid or expired reset token"}), 400
+        result = verify_reset_token(token)
+        if not result:
+            return jsonify({"error": "Invalid or expired reset token"}), 400
 
-#         user, reset_token = result
+        user, reset_token = result
 
-#         user.password = generate_password_hash(new_password)
-#         invalidate_token(reset_token)
-#         db.session.commit()
+        user.password = generate_password_hash(new_password)
+        invalidate_token(reset_token)
+        db.session.commit()
 
-#         return jsonify({"message": "Password has been reset successfully"}), 200
+        return jsonify({"message": "Password has been reset successfully"}), 200
 
-#     except Exception as e:
-#         db.session.rollback()
-#         return jsonify({
-#             "error": "An error occurred. Please try again.",
-#             "details": str(e)
-#         }), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "error": "An error occurred. Please try again.",
+            "details": str(e)
+        }), 500

@@ -11,10 +11,12 @@ from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
+app.config.from_object(Config)
+
 CORS(
     app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:3000", "https://yourdomain.com"],
+            "origins": ["http://localhost:3000", f"{app.config['WEBSITE_URL'] or app.config['FRONTEND_URL']}"],
             "methods": ["GET", "POST", "PUT", "DELETE"],
             "allow_headers": ["Content-Type", "Authorization"],
             "support_credentials": True
@@ -22,7 +24,6 @@ CORS(
     }
 )
 
-app.config.from_object(Config)
 
 # Initialize extensions
 db = SQLAlchemy(app)
