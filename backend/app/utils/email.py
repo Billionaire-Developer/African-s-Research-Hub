@@ -37,7 +37,7 @@ def send_password_reset_email(user, reset_url):
     
     # Text version (fallback)
     text_body = f"""
-        Dear {user.first_name} {user.last_name},
+        Dear {user.fullname},
 
         You recently requested to reset your password for your Conference Portal account.
 
