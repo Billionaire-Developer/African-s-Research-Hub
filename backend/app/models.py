@@ -97,7 +97,7 @@ class Notifications(db.Model):
     read = db.Column(db.Boolean, default=False)
 
     def __repr__(self):
-        return f"<NOtification ID: {self.id}, User ID: {self.user_id}, Read: {self.read}>"
+        return f"<Notification ID: {self.id}, User ID: {self.user_id}, Read: {self.read}>"
 
 
 class BlogPosts(db.Model):
