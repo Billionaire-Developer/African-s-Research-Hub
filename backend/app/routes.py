@@ -7,7 +7,8 @@ from paychangu.models.payment import Payment as PaychanguPayment
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 
-from app import app, db, paychangu_client
+from sqlalchemy.orm import joinedload
+from app import app, db, paychangu_client, limiter
 from app.email_service import (
     send_abstract_confirmation_email,
     send_abstract_review_email,
@@ -55,6 +56,7 @@ def before_request():
 
 @app.route("/api/submit", methods=["POST"])
 @student_required
+@limiter.limit("10 per day")
 def submit_abstract():
     """
     Submit abstract - supports both text content and PDF file upload
@@ -234,9 +236,20 @@ def download_abstract(id):
 
 @app.route("/api/abstracts", methods=["GET"])
 def get_abstracts():
-    abstracts = Abstracts.query.filter_by(status="published").all()
-    return jsonify(
-        [
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+    
+    # Limit per_page to prevent abuse
+    per_page = min(per_page, 50)
+
+    abstracts_pagination = (
+        Abstracts.query.filter_by(status="published")
+        .order_by(Abstracts.date_submitted.desc())
+        .paginate(page=page, per_page=per_page, error_out=False)
+    )
+    
+    return jsonify({
+        "abstracts": [
             {
                 "id": abstract.id,
                 "title": abstract.title,
@@ -252,9 +265,17 @@ def get_abstracts():
                 "authorId": abstract.author_id,
                 "dateSubmitted": abstract.date_submitted.isoformat(),
             }
-            for abstract in abstracts
-        ]
-    ), 200
+            for abstract in abstracts_pagination.items
+        ],
+        "pagination": {
+            "page": page,
+            "pages": abstracts_pagination.pages,
+            "per_page": per_page,
+            "total": abstracts_pagination.total,
+            "has_next": abstracts_pagination.has_next,
+            "has_prev": abstracts_pagination.has_prev,
+        }
+    }), 200
 
 
 @app.route("/api/abstracts/search", methods=["GET"])
@@ -285,10 +306,18 @@ def search_abstracts():
             )
         )
 
-    abstracts = query.all()
+    # Order by most recent
+    query = query.order_by(Abstracts.date_submitted.desc())
 
-    return jsonify(
-        [
+    # Pagination
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+    per_page = min(per_page, 50)
+
+    abstracts_pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return jsonify({
+        "abstracts": [
             {
                 "id": abstract.id,
                 "title": abstract.title,
@@ -304,9 +333,17 @@ def search_abstracts():
                 "authorId": abstract.author_id,
                 "dateSubmitted": abstract.date_submitted.isoformat(),
             }
-            for abstract in abstracts
-        ]
-    ), 200
+            for abstract in abstracts_pagination.items
+        ],
+        "pagination": {
+            "page": page,
+            "pages": abstracts_pagination.pages,
+            "per_page": per_page,
+            "total": abstracts_pagination.total,
+            "has_next": abstracts_pagination.has_next,
+            "has_prev": abstracts_pagination.has_prev,
+        }
+    }), 200
 
 
 @app.route("/api/abstracts/<int:id>", methods=["GET"])
@@ -343,10 +380,19 @@ def user_dashboard():
     if current_user.role.lower() != "student":
         return jsonify({"error": "Student access required"}), 403
 
+    # Optimized query with eager loading to prevent N+1 problem
+    abstracts = (
+        Abstracts.query.filter_by(author_id=current_user.id)
+        .options(joinedload(Abstracts.payments), joinedload(Abstracts.invoices))
+        .all()
+    )
+
     user_abstracts = []
-    for abstract in current_user.abstracts:
-        payment = Payments.query.filter_by(abstract_id=abstract.id).first()
-        invoice = Invoices.query.filter_by(abstract_id=abstract.id).first()
+    for abstract in abstracts:
+        # Get the most recent payment/invoice if multiple exist (replicating previous behavior roughly)
+        # Note: relationships return lists. We take the first one found or None.
+        payment = abstract.payments[0] if abstract.payments else None
+        invoice = abstract.invoices[0] if abstract.invoices else None
 
         abstract_data = {
             "id": abstract.id,
@@ -451,6 +497,7 @@ def admin_dashboard():
 
 @app.route("/api/payments/initiate", methods=["POST"])
 @student_required
+@limiter.limit("10 per hour")
 def initiate_payment():
     data = request.get_json()
     if not data:
@@ -617,6 +664,7 @@ def confirm_payment():
 
 
 @app.route("/api/login", methods=["POST"])
+@limiter.limit("5 per minute")
 def login():
     if current_user.is_authenticated:
         if current_user.role.lower() == "admin":
@@ -657,6 +705,7 @@ def login():
 
 
 @app.route("/api/register", methods=["POST"])
+@limiter.limit("5 per hour")
 def register():
     if current_user.is_authenticated:
         if current_user.role.lower() == "admin":
@@ -718,6 +767,7 @@ def logout():
 
 
 @app.route("/api/contact/", methods=["POST"])
+@limiter.limit("3 per hour")
 def contact():
     data = request.get_json()
     if not data:
@@ -1071,6 +1121,7 @@ def admin_get_reviews():
 
 
 @app.route('/api/password/request_reset', methods=['POST'])
+@limiter.limit("3 per hour")
 def request_password_reset():
     """Request password reset - sends email with reset link"""
     try:

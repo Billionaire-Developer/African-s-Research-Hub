@@ -9,3 +9,4 @@ paychangu
 email-validator
 pyjwt
 psycopg2-binary
+Flask-Limiter
