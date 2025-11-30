@@ -1,52 +1,41 @@
-import os
 from flask import Flask
-from config import Config
-from flask_cors import CORS
-from dotenv import load_dotenv
-from flask_migrate import Migrate
-from app.email_service import mail
-from flask_login import LoginManager
-from paychangu import PayChanguClient
-from flask_sqlalchemy import SQLAlchemy
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from app.config import config
+from app.extensions import db, migrate, login, mail, cors, limiter, PayChanguClient
 
-app = Flask(__name__)
+def create_app(config_name='default'):
+    app = Flask(__name__)
+    
+    # Load config
+    if not isinstance(config_name, str):
+         app.config.from_object(config_name)
+    else:
+        app.config.from_object(config[config_name])
 
-app.config.from_object(Config)
-
-CORS(
-    app, resources={
+    # Initialize extensions
+    db.init_app(app)
+    migrate.init_app(app, db)
+    login.init_app(app)
+    mail.init_app(app)
+    cors.init_app(app, resources={
         r"/api/*": {
-            "origins": [f"{app.config['WEBSITE_URL'] or app.config['FRONTEND_URL']}"],
+            "origins": ["http://localhost:3000", f"{app.config['WEBSITE_URL'] or app.config['FRONTEND_URL']}"],
             "methods": ["GET", "POST", "PUT", "DELETE"],
             "allow_headers": ["Content-Type", "Authorization"],
             "support_credentials": True
         }
-    }
-)
+    })
+    limiter.init_app(app)
+    
+    # Initialize PayChangu Client
+    # We store it in app.extensions or just make it available globally via current_app if we attached it
+    # Since PayChanguClient is a simple class, we can just instantiate it and attach to app
+    if app.config.get('PAYCHANGU_SECRET'):
+        app.paychangu_client = PayChanguClient(secret_key=app.config['PAYCHANGU_SECRET'])
+    
+    login.login_view = 'main.login' # Updated to blueprint endpoint
 
+    # Register Blueprints
+    from app.routes import bp as main_bp
+    app.register_blueprint(main_bp)
 
-# Initialize extensions
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
-login = LoginManager(app)
-login.login_view = 'login'  # Redirect to login page if not authenticated
-
-# Initialize Flask-Mail
-mail.init_app(app)
-
-# Initialize Flask-Limiter
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://"
-)
-
-# PayChangu client
-load_dotenv()
-PAYCHANGU_SECRET = os.getenv('PAYCHANGU_SECRET')
-paychangu_client = PayChanguClient(secret_key=PAYCHANGU_SECRET)
-
-from app import routes, models
+    return app

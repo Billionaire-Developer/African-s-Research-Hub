@@ -3,8 +3,7 @@ from flask_mail import Message, Mail
 from threading import Thread
 import logging
 
-# Initialize Flask-Mail (will be configured in __init__.py)
-mail = Mail()
+from app.extensions import mail
 
 def send_async_email(app, msg):
     """Send email asynchronously to avoid blocking the main thread"""

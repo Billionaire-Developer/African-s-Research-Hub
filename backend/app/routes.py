@@ -1,14 +1,18 @@
 import os
 from datetime import datetime, timezone
 
-from flask import current_app, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request, send_file
 from flask_login import current_user, login_required, login_user, logout_user
 from paychangu.models.payment import Payment as PaychanguPayment
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 
 from sqlalchemy.orm import joinedload
-from app import app, db, paychangu_client, limiter
+from sqlalchemy.orm import joinedload
+from app.extensions import db, limiter
+from app.utilities import admin_required, is_valid_email, student_required
+
+bp = Blueprint('main', __name__)
 from app.email_service import (
     send_abstract_confirmation_email,
     send_abstract_review_email,
@@ -29,7 +33,7 @@ from app.models import (
 )
 from app.utils.email import send_password_reset_email
 from app.utils.tokens import generate_reset_token, invalidate_token, verify_reset_token
-from utilities import admin_required, is_valid_email, student_required
+
 
 # File upload configuration
 UPLOAD_FOLDER = os.path.join(
@@ -47,14 +51,14 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-@app.before_request
+@bp.before_request
 def before_request():
     if current_user.is_authenticated:
         current_user.last_seen = datetime.now(timezone.utc)
         db.session.commit()
 
 
-@app.route("/api/submit", methods=["POST"])
+@bp.route("/api/submit", methods=["POST"])
 @student_required
 @limiter.limit("10 per day")
 def submit_abstract():
@@ -200,7 +204,7 @@ def submit_abstract():
     ), 201
 
 
-@app.route("/api/abstracts/<int:id>/download", methods=["GET"])
+@bp.route("/api/abstracts/<int:id>/download", methods=["GET"])
 def download_abstract(id):
     """Download abstract PDF file if available"""
     abstract = Abstracts.query.get(id)
@@ -234,7 +238,7 @@ def download_abstract(id):
         return jsonify({"error": f"Failed to download file: {str(e)}"}), 500
 
 
-@app.route("/api/abstracts", methods=["GET"])
+@bp.route("/api/abstracts", methods=["GET"])
 def get_abstracts():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 10, type=int)
@@ -278,7 +282,7 @@ def get_abstracts():
     }), 200
 
 
-@app.route("/api/abstracts/search", methods=["GET"])
+@bp.route("/api/abstracts/search", methods=["GET"])
 def search_abstracts():
     """Search abstracts with filters"""
     field = request.args.get("field")
@@ -346,7 +350,7 @@ def search_abstracts():
     }), 200
 
 
-@app.route("/api/abstracts/<int:id>", methods=["GET"])
+@bp.route("/api/abstracts/<int:id>", methods=["GET"])
 def get_specific_abstract(id):
     abstract = Abstracts.query.get(id)
 
@@ -372,7 +376,7 @@ def get_specific_abstract(id):
     ), 200
 
 
-@app.route("/api/user/dashboard", methods=["GET"])
+@bp.route("/api/user/dashboard", methods=["GET"])
 @student_required
 def user_dashboard():
     """Get student's dashboard info including their abstracts and payment status"""
@@ -456,7 +460,7 @@ def user_dashboard():
     return jsonify(dashboard_data), 200
 
 
-@app.route("/api/admin", methods=["GET"])
+@bp.route("/api/admin", methods=["GET"])
 @admin_required
 def admin_dashboard():
     """Get admin dashboard with overview statistics"""
@@ -495,7 +499,7 @@ def admin_dashboard():
     return jsonify({"stats": stats, "recentAbstracts": recent_abstracts_data}), 200
 
 
-@app.route("/api/payments/initiate", methods=["POST"])
+@bp.route("/api/payments/initiate", methods=["POST"])
 @student_required
 @limiter.limit("10 per hour")
 def initiate_payment():
@@ -531,7 +535,7 @@ def initiate_payment():
         },
     )
 
-    response = paychangu_client.initiate_transaction(paychangu_payment)
+    response = current_app.paychangu_client.initiate_transaction(paychangu_payment)
 
     if response.status != "success":
         return jsonify({"error": "Failed to initiate payment"}), 500
@@ -580,7 +584,7 @@ def initiate_payment():
     ), 201
 
 
-@app.route("/api/payments/confirm", methods=["POST"])
+@bp.route("/api/payments/confirm", methods=["POST"])
 @student_required
 def confirm_payment():
     data = request.get_json()
@@ -609,7 +613,7 @@ def confirm_payment():
 
     # Check payment status via PayChangu
     try:
-        payment_check = paychangu_client.verify_transaction(transaction_id)
+        payment_check = current_app.paychangu_client.verify_transaction(transaction_id)
     except Exception as e:
         return jsonify({"error": "Payment verification failed", "details": str(e)}), 500
 
@@ -663,7 +667,7 @@ def confirm_payment():
     ), 200
 
 
-@app.route("/api/login", methods=["POST"])
+@bp.route("/api/login", methods=["POST"])
 @limiter.limit("5 per minute")
 def login():
     if current_user.is_authenticated:
@@ -704,7 +708,7 @@ def login():
     return jsonify({"message": "You have been successfully logged in"}), 201
 
 
-@app.route("/api/register", methods=["POST"])
+@bp.route("/api/register", methods=["POST"])
 @limiter.limit("5 per hour")
 def register():
     if current_user.is_authenticated:
@@ -759,14 +763,14 @@ def register():
     ), 201
 
 
-@app.route("/api/logout/", methods=["POST"])
+@bp.route("/api/logout/", methods=["POST"])
 @login_required
 def logout():
     logout_user()
     return jsonify({"message": "You have been logged out"}), 200
 
 
-@app.route("/api/contact/", methods=["POST"])
+@bp.route("/api/contact/", methods=["POST"])
 @limiter.limit("3 per hour")
 def contact():
     data = request.get_json()
@@ -830,7 +834,7 @@ def contact():
     ), 201
 
 
-@app.route("/api/admin/review/<int:abstract_id>", methods=["POST"])
+@bp.route("/api/admin/review/<int:abstract_id>", methods=["POST"])
 @admin_required
 def review_abstract(abstract_id):
     """Admin endpoint to approve/reject abstract with feedback"""
@@ -905,7 +909,7 @@ def review_abstract(abstract_id):
     ), 200
 
 
-@app.route("/api/resubmit/<int:abstract_id>", methods=["POST"])
+@bp.route("/api/resubmit/<int:abstract_id>", methods=["POST"])
 @student_required
 def resubmit_abstract(abstract_id):
     """Allow students to update and resubmit rejected abstracts"""
@@ -969,7 +973,7 @@ def resubmit_abstract(abstract_id):
     ), 200
 
 
-@app.route("/api/reviews", methods=["POST"])
+@bp.route("/api/reviews", methods=["POST"])
 def submit_review():
     """Submit a new review"""
     data = request.get_json()
@@ -1014,7 +1018,7 @@ def submit_review():
         return jsonify({"error": "Failed to save review"}), 500
 
 
-@app.route("/api/reviews", methods=["GET"])
+@bp.route("/api/reviews", methods=["GET"])
 def get_reviews():
     """Get all reviews with pagination and filtering"""
     page = request.args.get("page", 1, type=int)
@@ -1066,7 +1070,7 @@ def get_reviews():
     ), 200
 
 
-@app.route("/api/reviews/stats", methods=["GET"])
+@bp.route("/api/reviews/stats", methods=["GET"])
 def get_review_stats():
     """Get review statistics summary"""
 
@@ -1099,7 +1103,7 @@ def get_review_stats():
     ), 200
 
 
-@app.route("/api/admin/reviews", methods=["GET"])
+@bp.route("/api/admin/reviews", methods=["GET"])
 @admin_required
 def admin_get_reviews():
     """Admin endpoint to get all reviews with user details"""
@@ -1120,7 +1124,7 @@ def admin_get_reviews():
     return jsonify({"reviews": reviews_data, "total": len(reviews_data)}), 200
 
 
-@app.route('/api/password/request_reset', methods=['POST'])
+@bp.route('/api/password/request_reset', methods=['POST'])
 @limiter.limit("3 per hour")
 def request_password_reset():
     """Request password reset - sends email with reset link"""
@@ -1154,7 +1158,7 @@ def request_password_reset():
         }), 500
 
 
-@app.route('/api/password/reset', methods=['POST'])
+@bp.route('/api/password/reset', methods=['POST'])
 def reset_password():
     """ API endpoint for password reset """
 

@@ -1,0 +1,24 @@
+[Unit]
+Description=Gunicorn instance to serve ARH Backend
+After=network.target
+
+[Service]
+# User and Group the app will run as
+User=ubuntu
+Group=www-data
+
+# Path to your backend directory
+WorkingDirectory=/var/www/arh_backend/backend
+
+# Environment variables
+Environment="PATH=/var/www/arh_backend/backend/.venv/bin"
+
+# Command to start Gunicorn
+# --workers 3: Good for a 1-2 core VPS (2 * cores + 1)
+# --bind unix:arh_backend.sock: Creates a socket file for Nginx to talk to
+# -m 007: Sets socket permissions
+# run:app: Module 'run.py', variable 'app'
+ExecStart=/var/www/arh_backend/backend/.venv/bin/gunicorn --workers 3 --bind unix:arh_backend.sock -m 007 run:app
+
+[Install]
+WantedBy=multi-user.target

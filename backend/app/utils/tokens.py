@@ -1,7 +1,7 @@
 import jwt
 from datetime import datetime, timezone
 from flask import current_app
-from app import db
+from app.extensions import db
 from app.models import PasswordResetToken
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
